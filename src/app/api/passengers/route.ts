@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+type QueryRow = Record<string, any>;
+
 // GET: Fetch all passengers or a specific passenger
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +11,7 @@ export async function GET(request: NextRequest) {
     const name = searchParams.get('name');
     const email = searchParams.get('email');
     const contact = searchParams.get('contact');
+    const include_bookings = searchParams.get('include_bookings') === 'true';
     
     // If id is provided, fetch a specific passenger
     if (id) {
@@ -35,6 +38,18 @@ export async function GET(request: NextRequest) {
         ORDER BY s.journey_date DESC`,
         [id]
       );
+      
+      // Include bookings if requested
+      if (include_bookings) {
+        return NextResponse.json({
+          success: true,
+          data: {
+            ...passenger[0],
+            ticket_history: tickets,
+            bookings: tickets
+          }
+        });
+      }
       
       return NextResponse.json({ 
         success: true, 

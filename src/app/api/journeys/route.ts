@@ -6,11 +6,12 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
-    const schedule_id = searchParams.get('schedule_id');
-    const source = searchParams.get('source');
-    const destination = searchParams.get('destination');
+    const scheduleId = searchParams.get('schedule_id');
+    const sourceId = searchParams.get('source_id');
+    const destinationId = searchParams.get('destination_id');
+    const classId = searchParams.get('class_id');
+    const trainId = searchParams.get('train_id');
     const date = searchParams.get('date');
-    const class_id = searchParams.get('class_id');
     
     // If id is provided, fetch a specific journey with availability details
     if (id) {
@@ -115,8 +116,48 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: journeyDetails });
     }
     
+    // If train_id, class_id and date are provided, find the matching journey
+    if (trainId && classId && date) {
+      // Build the base query
+      let sql = `
+        SELECT j.*, 
+          s.journey_date, s.train_id, s.status as train_status,
+          t.train_number, t.train_name,
+          src.station_name as source_station, src.station_code as source_code,
+          dest.station_name as destination_station, dest.station_code as destination_code,
+          c.class_name, c.class_code
+        FROM JOURNEY j
+        JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+        JOIN TRAIN t ON s.train_id = t.train_id
+        JOIN STATION src ON j.source_station_id = src.station_id
+        JOIN STATION dest ON j.destination_station_id = dest.station_id
+        JOIN CLASS c ON j.class_id = c.class_id
+        WHERE s.train_id = ? AND j.class_id = ? AND s.journey_date = ?
+      `;
+      
+      const params: any[] = [trainId, classId, date];
+      
+      // If source and destination are provided, filter by them
+      if (sourceId && destinationId) {
+        sql += ` AND j.source_station_id = ? AND j.destination_station_id = ?`;
+        params.push(sourceId, destinationId);
+      }
+      
+      const journeys = await query(sql, params);
+      
+      if (!Array.isArray(journeys) || journeys.length === 0) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Journey not found',
+          query: { train_id: trainId, class_id: classId, date, source_id: sourceId, destination_id: destinationId }
+        }, { status: 404 });
+      }
+      
+      return NextResponse.json({ success: true, data: journeys });
+    }
+    
     // If schedule_id is provided, fetch journeys for a specific schedule
-    if (schedule_id) {
+    if (scheduleId) {
       const journeys = await query(
         `SELECT j.*, 
           src.station_name as source_station, src.station_code as source_code,
@@ -130,7 +171,7 @@ export async function GET(request: NextRequest) {
         JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
         JOIN SEAT_CONFIGURATION sc ON s.train_id = sc.train_id AND j.class_id = sc.class_id
         WHERE j.schedule_id = ?`,
-        [schedule_id]
+        [scheduleId]
       );
       
       return NextResponse.json({ 
@@ -141,7 +182,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Search for journeys between source and destination on a specific date and class
-    if (source && destination && date) {
+    if (sourceId && destinationId && date) {
       let sql = `
         SELECT j.*, 
           s.journey_date, s.status as train_status, s.delay_time,
@@ -173,13 +214,13 @@ export async function GET(request: NextRequest) {
       
       const params: any[] = [
         date, 
-        source, source, `%${source}%`,
-        destination, destination, `%${destination}%`
+        sourceId, sourceId, `%${sourceId}%`,
+        destinationId, destinationId, `%${destinationId}%`
       ];
       
-      if (class_id) {
+      if (classId) {
         sql += ` AND j.class_id = ?`;
-        params.push(class_id);
+        params.push(classId);
       }
       
       sql += ` ORDER BY s.journey_date, rs_src.standard_departure_time`;

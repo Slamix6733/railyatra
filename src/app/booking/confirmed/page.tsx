@@ -30,6 +30,7 @@ interface TicketData {
   total_fare: number;
   payment_method: string;
   booking_time: string;
+  ticket_id?: number;
 }
 
 export default function BookingConfirmationPage() {
@@ -41,18 +42,119 @@ export default function BookingConfirmationPage() {
   const confettiRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    // Get ticket data from session storage
+    // Get ticket data from session storage first
     try {
+      console.log('Loading ticket data from session storage');
       const storedData = sessionStorage.getItem('ticket_data');
       if (!storedData) {
+        console.error('No ticket data found in session storage');
         setError('Ticket information not found. Please restart the booking process.');
         setLoading(false);
         return;
       }
       
       const parsedData = JSON.parse(storedData) as TicketData;
+      console.log('Session storage ticket data:', parsedData);
       
-      // Assign seat and coach numbers to each passenger (in real app, this would come from backend)
+      // If there's a ticket_id, fetch the complete data from the API
+      if (parsedData.ticket_id && typeof parsedData.ticket_id === 'number' && parsedData.ticket_id > 0) {
+        console.log('Found ticket_id in session storage, fetching from API:', parsedData.ticket_id);
+        fetchTicketFromApi(parsedData.ticket_id);
+      } else {
+        console.log('No valid ticket_id found, using session storage data directly');
+        // Fallback to the legacy approach for compatibility
+        fallbackToSessionStorage();
+      }
+    } catch (error) {
+      console.error('Error retrieving ticket data from session storage:', error);
+      setError('An error occurred while retrieving your ticket information.');
+      setLoading(false);
+    }
+  }, []);
+  
+  // New function to fetch ticket data from API
+  const fetchTicketFromApi = async (ticketId: number) => {
+    try {
+      // Helper function to safely parse JSON responses
+      const safeJsonParse = async (response: Response) => {
+        const text = await response.text();
+        try {
+          return { json: JSON.parse(text), text };
+        } catch (e) {
+          console.error('Failed to parse response as JSON:', text.substring(0, 100) + '...');
+          return { json: null, text };
+        }
+      };
+      
+      console.log('Fetching ticket from API with ID:', ticketId);
+      const response = await fetch(`/api/tickets?id=${ticketId}`);
+      const { json: data, text } = await safeJsonParse(response);
+      
+      if (!response.ok || !data || !data.success || !data.data) {
+        console.error('API Error or invalid response:', data || text.substring(0, 200));
+        // Fallback to session storage data
+        fallbackToSessionStorage();
+        return;
+      }
+      
+      const apiTicket = data.data;
+      const ticketPassengers = apiTicket.passengers || [];
+      
+      // Format the data to match the TicketData interface
+      setTicket({
+        pnr: apiTicket.pnr_number,
+        train_id: apiTicket.train_id,
+        train_number: apiTicket.train_number,
+        train_name: apiTicket.train_name,
+        source: apiTicket.source_station,
+        destination: apiTicket.destination_station,
+        journey_date: apiTicket.journey_date,
+        departure_time: apiTicket.departure_time || apiTicket.standard_departure_time,
+        arrival_time: apiTicket.arrival_time || apiTicket.standard_arrival_time,
+        class_name: apiTicket.class_name,
+        class_code: apiTicket.class_code,
+        passengers: ticketPassengers.map((p: any) => ({
+          name: p.name,
+          age: p.age,
+          gender: p.gender,
+          berth_preference: p.berth_type || 'No Preference',
+          seat: p.seat_number || String(Math.floor(Math.random() * 72) + 1),
+          coach: p.seat_number ? p.seat_number.split('-')[0] : ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'A1', 'A2', 'B1', 'B2'][Math.floor(Math.random() * 10)]
+        })),
+        contact_email: ticketPassengers[0]?.email || '',
+        contact_phone: ticketPassengers[0]?.contact_number || '',
+        total_fare: apiTicket.total_fare,
+        payment_method: apiTicket.payment_method || 'online',
+        booking_time: apiTicket.booking_date
+      });
+      
+      // Create success animation after a short delay
+      setTimeout(() => {
+        setShowConfetti(true);
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error fetching ticket from API:', error);
+      // Fallback to session storage data
+      fallbackToSessionStorage();
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Helper function to fallback to session storage data
+  const fallbackToSessionStorage = () => {
+    console.log('Falling back to session storage data');
+    try {
+      const storedData = sessionStorage.getItem('ticket_data');
+      if (!storedData) {
+        setError('Ticket information not found. Please restart the booking process.');
+        return;
+      }
+      
+      const parsedData = JSON.parse(storedData) as TicketData;
+      
+      // Assign seat and coach numbers to each passenger
       const updatedPassengers = parsedData.passengers.map((passenger, index) => {
         const coaches = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'A1', 'A2', 'B1', 'B2'];
         const coachIndex = Math.floor(Math.random() * 10);
@@ -75,14 +177,11 @@ export default function BookingConfirmationPage() {
       setTimeout(() => {
         setShowConfetti(true);
       }, 500);
-      
-    } catch (error) {
-      console.error('Error retrieving ticket data:', error);
-      setError('An error occurred while retrieving your ticket information.');
-    } finally {
-      setLoading(false);
+    } catch (fallbackError) {
+      console.error('Error in fallback mechanism:', fallbackError);
+      setError('An error occurred while retrieving your ticket information. Please try again.');
     }
-  }, []);
+  };
   
   // Create confetti animation effect
   useEffect(() => {
@@ -343,7 +442,7 @@ export default function BookingConfirmationPage() {
             <h2 className="text-lg font-semibold text-gray-800 mb-4">Passenger Details</h2>
             
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+              <table className="min-w-full divide-y divide-gray-200 stagger-animation">
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">

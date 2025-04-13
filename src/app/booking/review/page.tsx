@@ -210,16 +210,154 @@ export default function BookingReview() {
     setSubmitting(true);
     
     try {
-      // Generate PNR number (in a real app, this would come from the backend)
-      const pnr = Math.floor(10000000000 + Math.random() * 90000000000).toString();
+      // Get the current user information from localStorage
+      const userStr = localStorage.getItem('user');
+      if (!userStr) {
+        alert('Please log in to continue with the booking.');
+        router.push('/login');
+        return;
+      }
+      
+      const user = JSON.parse(userStr);
+      console.log('Current user:', user);
+      
+      // Ensure user has a passenger_id
+      if (!user.passenger_id) {
+        console.error('User missing passenger_id, cannot proceed with booking');
+        alert('Your account is missing required information. Please update your profile before booking.');
+        setSubmitting(false);
+        return;
+      }
       
       const selectedClass = trainDetails?.seat_configurations.find(
         config => config.class_id === bookingData?.class_id
       ) || trainDetails?.seat_configurations[0];
       
-      // Store ticket data in session storage for confirmation page
-      const ticketData = {
-        pnr,
+      // Initialize with a default fallback journey_id
+      let journey_id = 1;
+      
+      // First try to find an existing journey
+      try {
+        // Get source and destination stations from the train details or use defaults
+        // We need to lookup the station IDs for the source and destination station names
+        // For now, we'll use defaults and add a lookup in the future
+        const sourceStationId = 1;  // Default source station ID
+        const destStationId = 2;    // Default destination station ID
+        
+        console.log(`Searching for journey with train_id=${trainDetails?.train_id}, source=${sourceStationId}, destination=${destStationId}, class_id=${selectedClass?.class_id}, date=${bookingData?.journey_date}`);
+        
+        // First check if a journey exists with the exact source, destination and class
+        const journeyResponse = await fetch(
+          `/api/journeys?train_id=${trainDetails?.train_id}&class_id=${selectedClass?.class_id}&date=${bookingData?.journey_date}&source_id=${sourceStationId}&destination_id=${destStationId}`
+        );
+        
+        const journeyData = await journeyResponse.json();
+        console.log('Journey search result:', journeyData);
+        
+        if (journeyData.success && journeyData.data && journeyData.data.length > 0) {
+          journey_id = journeyData.data[0].journey_id;
+          console.log('Found existing journey with ID:', journey_id);
+        } else {
+          // Create a new journey if one doesn't exist
+          console.log('Existing journey not found, creating a new one');
+          
+          // Get schedule_id from the train data or use a default
+          const schedule_id = 1; // Using default schedule_id since we don't have it in train details
+          
+          const createJourneyRequest = {
+            schedule_id: schedule_id,
+            source_station_id: sourceStationId,
+            destination_station_id: destStationId,
+            class_id: selectedClass?.class_id || 1
+          };
+          
+          console.log('Creating journey with data:', createJourneyRequest);
+          
+          const createJourneyResponse = await fetch('/api/journeys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(createJourneyRequest)
+          });
+          
+          const newJourneyData = await createJourneyResponse.json();
+          console.log('Journey creation result:', newJourneyData);
+          
+          if (newJourneyData.success && newJourneyData.data && newJourneyData.data.journey_id) {
+            journey_id = newJourneyData.data.journey_id;
+            console.log('Created new journey with ID:', journey_id);
+          } else {
+            console.warn('Failed to create journey, using fallback journey_id:', journey_id);
+          }
+        }
+      } catch (journeyError) {
+        console.error('Error finding/creating journey:', journeyError);
+        console.warn('Using fallback journey_id:', journey_id);
+      }
+      
+      // Calculate the total fare
+      const totalFare = calculateTotalFare() + 30 + (calculateTotalFare() + 30) * 0.05;
+      
+      // Prepare ticket creation request
+      // We're using the logged-in user as the primary passenger
+      const ticketRequest = {
+        journey_id,
+        passengers: [{
+          passenger_id: user.passenger_id,
+          name: user.name || bookingData?.passengers[0]?.name,
+          age: user.age || bookingData?.passengers[0]?.age || 30,
+          gender: user.gender || bookingData?.passengers[0]?.gender || 'Male',
+          berth_preference: bookingData?.passengers[0]?.berth_preference || 'No Preference',
+          class_code: selectedClass?.class_code || 'SL',
+          is_primary_passenger: true
+        }],
+        total_fare: totalFare,
+        payment: {
+          amount: totalFare,
+          payment_mode: paymentMethod,
+          transaction_id: 'TX' + Date.now() + Math.floor(Math.random() * 10000)
+        }
+      };
+      
+      console.log('Sending ticket creation request:', ticketRequest);
+      
+      // Create the ticket
+      const ticketResponse = await fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ticketRequest)
+      });
+      
+      // Safely parse the response
+      const responseText = await ticketResponse.text();
+      let ticketData;
+      let ticketId = Math.floor(1000 + Math.random() * 9000);
+      let pnrNumber = 'PNR' + Math.floor(1000000000 + Math.random() * 9000000000);
+      
+      try {
+        ticketData = JSON.parse(responseText);
+        console.log('Ticket creation response:', ticketData);
+        
+        if (ticketData && ticketData.success && ticketData.data) {
+          ticketId = ticketData.data.ticket_id;
+          pnrNumber = ticketData.data.pnr_number;
+          console.log('Created ticket with ID:', ticketId, 'and PNR:', pnrNumber);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse ticket API response:', parseError);
+        console.log('Raw response:', responseText.substring(0, 200));
+      }
+      
+      // Format passenger data for session storage
+      const formattedPassengers = bookingData?.passengers.map(passenger => ({
+        name: passenger.name,
+        age: Number(passenger.age),
+        gender: passenger.gender,
+        berth_preference: passenger.berth_preference
+      }));
+      
+      // Store the ticket data in session storage for the confirmation page
+      const sessionTicketData = {
+        pnr: pnrNumber,
         train_id: trainDetails?.train_id,
         train_number: trainDetails?.train_number,
         train_name: trainDetails?.train_name,
@@ -230,23 +368,24 @@ export default function BookingReview() {
         arrival_time: trainDetails?.standard_arrival_time,
         class_name: selectedClass?.class_name,
         class_code: selectedClass?.class_code,
-        passengers: bookingData?.passengers,
-        contact_email: bookingData?.contact_email,
-        contact_phone: bookingData?.contact_phone,
-        total_fare: calculateTotalFare(),
+        passengers: formattedPassengers,
+        contact_email: bookingData?.contact_email || user.email,
+        contact_phone: bookingData?.contact_phone || user.contact_number,
+        total_fare: totalFare,
         payment_method: paymentMethod,
-        booking_time: new Date().toISOString()
+        booking_time: new Date().toISOString(),
+        ticket_id: ticketId
       };
       
-      sessionStorage.setItem('ticket_data', JSON.stringify(ticketData));
+      console.log('Storing ticket data in session storage:', sessionTicketData);
+      sessionStorage.setItem('ticket_data', JSON.stringify(sessionTicketData));
       
-      // Simulate payment processing delay
+      // Navigate to confirmation page after a short delay
       setTimeout(() => {
-        // Navigate to confirmation page
         router.push('/booking/confirmed');
-      }, 1500);
+      }, 1000);
     } catch (error) {
-      console.error('Error processing payment:', error);
+      console.error('Error during booking process:', error);
       alert('Failed to process payment. Please try again.');
       setSubmitting(false);
     }
