@@ -38,9 +38,7 @@ async function getAllStats(startDate: string, endDate: string) {
       cancellationStats,
       popularRoutesStats,
       billingStats,
-      occupancyTrends,
       revenueByTrainType,
-      peakTravelTimes,
       passengerDemographics,
       paymentAnalytics,
       stationAnalytics,
@@ -58,9 +56,7 @@ async function getAllStats(startDate: string, endDate: string) {
       getCancellationStats(startDate, endDate),
       getPopularRoutesStats(startDate, endDate),
       getBillingStats(startDate, endDate),
-      getOccupancyTrendsByClass(startDate, endDate),
       getRevenueByTrainType(startDate, endDate),
-      getPeakTravelTimes(startDate, endDate),
       getPassengerDemographics(startDate, endDate),
       getRevenueByPaymentMethod(startDate, endDate),
       getStationAnalytics(startDate, endDate),
@@ -89,9 +85,7 @@ async function getAllStats(startDate: string, endDate: string) {
       routes: popularRoutesStats,
       bill: billingStats,
       // New analytics
-      occupancy_trends: occupancyTrends,
       revenue_by_train_type: revenueByTrainType,
-      peak_travel_times: peakTravelTimes,
       passenger_demographics: passengerDemographics,
       payment_analytics: paymentAnalytics,
       station_analytics: stationAnalytics,
@@ -865,69 +859,6 @@ async function getUniqueTicketCount(startDate: string, endDate: string): Promise
 }
 
 // Add these new analytics functions before the end of the file
-async function getOccupancyTrendsByClass(startDate: string, endDate: string) {
-  try {
-    const sqlQuery = `
-      SELECT 
-        c.class_name,
-        c.class_code,
-        DATE(t.journey_date) as travel_date,
-        COUNT(pt.passenger_ticket_id) as passenger_count,
-        SUM(CASE WHEN pt.status = 'Confirmed' THEN 1 ELSE 0 END) as confirmed_count,
-        SUM(CASE WHEN pt.status = 'Waitlisted' THEN 1 ELSE 0 END) as waitlist_count
-      FROM PASSENGER_TICKET pt
-      JOIN TICKET t ON pt.ticket_id = t.ticket_id
-      JOIN JOURNEY j ON t.journey_id = j.journey_id
-      JOIN CLASS c ON j.class_id = c.class_id
-      WHERE t.booking_date BETWEEN ? AND ?
-      GROUP BY c.class_id, DATE(t.journey_date)
-      ORDER BY travel_date, c.class_id
-    `;
-    
-    const results = await query(sqlQuery, [startDate, endDate]);
-    const trendData = results as RowDataPacket[];
-    
-    // Process the data to create a more useful format
-    const classes = [...new Set(trendData.map(item => item.class_code))];
-    const dates = [...new Set(trendData.map(item => item.travel_date))].sort();
-    
-    const formattedTrends = classes.map(classCode => {
-      const classData = trendData.filter(item => item.class_code === classCode);
-      const className = classData.length > 0 ? classData[0].class_name : classCode;
-      
-      return {
-        class_code: classCode,
-        class_name: className,
-        data: dates.map(date => {
-          const dataPoint = classData.find(item => item.travel_date.toString() === date.toString()) || {
-            passenger_count: 0,
-            confirmed_count: 0,
-            waitlist_count: 0
-          };
-          
-          return {
-            date,
-            total: dataPoint.passenger_count || 0,
-            confirmed: dataPoint.confirmed_count || 0,
-            waitlisted: dataPoint.waitlist_count || 0
-          };
-        })
-      };
-    });
-    
-    return {
-      trends: formattedTrends,
-      dates
-    };
-  } catch (error) {
-    console.error('Error getting occupancy trends:', error);
-    return {
-      trends: [],
-      dates: []
-    };
-  }
-}
-
 async function getRevenueByTrainType(startDate: string, endDate: string) {
   try {
     const sqlQuery = `
@@ -957,75 +888,6 @@ async function getRevenueByTrainType(startDate: string, endDate: string) {
   } catch (error) {
     console.error('Error getting revenue by train type:', error);
     return [];
-  }
-}
-
-async function getPeakTravelTimes(startDate: string, endDate: string) {
-  try {
-    // Get hourly distribution
-    const hourlyQuerySql = `
-      SELECT 
-        HOUR(s.departure_time) as hour_of_day,
-        COUNT(t.ticket_id) as ticket_count,
-        COUNT(DISTINCT pt.passenger_id) as passenger_count
-      FROM TICKET t
-      JOIN JOURNEY j ON t.journey_id = j.journey_id
-      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
-      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
-      WHERE t.booking_date BETWEEN ? AND ?
-      AND t.booking_status != 'Cancelled'
-      GROUP BY HOUR(s.departure_time)
-      ORDER BY hour_of_day
-    `;
-    
-    // Get weekday distribution
-    const weekdayQuerySql = `
-      SELECT 
-        WEEKDAY(s.journey_date) as day_of_week,
-        COUNT(t.ticket_id) as ticket_count,
-        COUNT(DISTINCT pt.passenger_id) as passenger_count
-      FROM TICKET t
-      JOIN JOURNEY j ON t.journey_id = j.journey_id
-      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
-      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
-      WHERE t.booking_date BETWEEN ? AND ?
-      AND t.booking_status != 'Cancelled'
-      GROUP BY WEEKDAY(s.journey_date)
-      ORDER BY day_of_week
-    `;
-    
-    const [hourlyResults, weekdayResults] = await Promise.all([
-      query(hourlyQuerySql, [startDate, endDate]),
-      query(weekdayQuerySql, [startDate, endDate])
-    ]);
-    
-    // Map weekday numbers to names
-    const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    
-    const hourlyDistribution = (hourlyResults as RowDataPacket[]).map(item => ({
-      hour: item.hour_of_day,
-      hour_formatted: `${item.hour_of_day}:00`,
-      ticket_count: item.ticket_count,
-      passenger_count: item.passenger_count
-    }));
-    
-    const weekdayDistribution = (weekdayResults as RowDataPacket[]).map(item => ({
-      day: item.day_of_week,
-      day_name: weekdayNames[item.day_of_week],
-      ticket_count: item.ticket_count,
-      passenger_count: item.passenger_count
-    }));
-    
-    return {
-      hourly: hourlyDistribution,
-      weekday: weekdayDistribution
-    };
-  } catch (error) {
-    console.error('Error getting peak travel times:', error);
-    return {
-      hourly: [],
-      weekday: []
-    };
   }
 }
 
@@ -1406,7 +1268,7 @@ async function getClassWiseAnalytics(startDate: string, endDate: string) {
         c.class_id,
         c.class_name, 
         c.class_code,
-        DATE(t.booking_date) as booking_date,
+        DATE(s.journey_date) as journey_date,
         COUNT(pt.passenger_ticket_id) as passengers,
         SUM(CASE WHEN pt.status = 'Confirmed' THEN 1 ELSE 0 END) as confirmed,
         SUM(CASE WHEN pt.status = 'Waitlisted' THEN 1 ELSE 0 END) as waitlisted,
@@ -1414,10 +1276,11 @@ async function getClassWiseAnalytics(startDate: string, endDate: string) {
       FROM CLASS c
       JOIN JOURNEY j ON c.class_id = j.class_id
       JOIN TICKET t ON j.journey_id = t.journey_id
+      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
       JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
-      WHERE t.booking_date BETWEEN ? AND ?
-      GROUP BY c.class_id, DATE(t.booking_date)
-      ORDER BY booking_date, c.class_id
+      WHERE s.journey_date BETWEEN ? AND ?
+      GROUP BY c.class_id, DATE(s.journey_date)
+      ORDER BY journey_date, c.class_id
     `;
     
     // Get berth type preferences by class
@@ -1459,7 +1322,7 @@ async function getClassWiseAnalytics(startDate: string, endDate: string) {
       }
       
       classes.get(row.class_id).days.push({
-        date: row.booking_date,
+        date: row.journey_date,
         total: row.passengers,
         confirmed: row.confirmed,
         waitlisted: row.waitlisted,

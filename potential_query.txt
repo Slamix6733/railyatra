@@ -1,0 +1,526 @@
+-- POTENTIAL MYSQL FUNCTIONS AND TRIGGERS FOR RAIL BOOKING SYSTEM
+
+-- 1. PNR status tracking for a given ticket.
+DELIMITER //
+CREATE FUNCTION get_pnr_status(pnr_number VARCHAR(20))
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE ticket_data JSON;
+    SELECT JSON_OBJECT(
+        'ticket_id', t.ticket_id,
+        'pnr_number', t.pnr_number,
+        'booking_status', t.booking_status,
+        'journey_details', JSON_OBJECT(
+            'train_number', tr.train_number,
+            'train_name', tr.train_name,
+            'journey_date', s.journey_date,
+            'source_station', src.station_name,
+            'destination_station', dest.station_name,
+            'departure_time', rs_src.standard_departure_time,
+            'arrival_time', rs_dest.standard_arrival_time
+        ),
+        'passengers', (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'passenger_id', p.passenger_id,
+                    'name', p.name,
+                    'age', p.age,
+                    'seat_number', pt.seat_number,
+                    'berth_type', pt.berth_type,
+                    'status', pt.status,
+                    'waitlist_number', pt.waitlist_number
+                )
+            )
+            FROM PASSENGER_TICKET pt
+            JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+            WHERE pt.ticket_id = t.ticket_id
+        )
+    ) INTO ticket_data
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN STATION src ON j.source_station_id = src.station_id
+    JOIN STATION dest ON j.destination_station_id = dest.station_id
+    JOIN ROUTE_SEGMENT rs_src ON tr.train_id = rs_src.train_id AND j.source_station_id = rs_src.station_id
+    JOIN ROUTE_SEGMENT rs_dest ON tr.train_id = rs_dest.train_id AND j.destination_station_id = rs_dest.station_id
+    WHERE t.pnr_number = pnr_number;
+    
+    RETURN ticket_data;
+END//
+DELIMITER ;
+
+-- 2. Train schedule lookup for a given train.
+DELIMITER //
+CREATE FUNCTION get_train_schedule(train_id_or_number VARCHAR(50))
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE schedule_data JSON;
+    SELECT JSON_ARRAYAGG(
+        JSON_OBJECT(
+            'schedule_id', s.schedule_id,
+            'journey_date', s.journey_date,
+            'status', s.status,
+            'delay_time', s.delay_time,
+            'route_stations', (
+                SELECT JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'station_id', st.station_id,
+                        'station_name', st.station_name,
+                        'station_code', st.station_code,
+                        'arrival_time', rs.standard_arrival_time,
+                        'departure_time', rs.standard_departure_time,
+                        'distance_from_source', rs.distance_from_source,
+                        'sequence_number', rs.sequence_number
+                    )
+                    ORDER BY rs.sequence_number
+                )
+                FROM ROUTE_SEGMENT rs
+                JOIN STATION st ON rs.station_id = st.station_id
+                WHERE rs.train_id = t.train_id
+            )
+        )
+    ) INTO schedule_data
+    FROM SCHEDULE s
+    JOIN TRAIN t ON s.train_id = t.train_id
+    WHERE t.train_id = train_id_or_number OR t.train_number = train_id_or_number
+    GROUP BY t.train_id;
+    
+    RETURN schedule_data;
+END//
+DELIMITER ;
+
+-- 3. Available seats query for a specific train, date and class.
+DELIMITER //
+CREATE FUNCTION get_available_seats(journey_id INT, class_id INT)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE seats_data JSON;
+    DECLARE total_seats INT;
+    DECLARE booked_seats INT;
+    DECLARE available_seats INT;
+    DECLARE waitlisted_count INT;
+    DECLARE rac_count INT;
+    
+    -- Get total seats
+    SELECT sc.total_seats INTO total_seats
+    FROM JOURNEY j
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN SEAT_CONFIGURATION sc ON s.train_id = sc.train_id AND sc.class_id = class_id
+    WHERE j.journey_id = journey_id;
+    
+    -- Get booked seats count
+    SELECT 
+        COUNT(CASE WHEN pt.status = 'CONFIRMED' THEN 1 END),
+        COUNT(CASE WHEN pt.status = 'WAITLISTED' THEN 1 END),
+        COUNT(CASE WHEN pt.status = 'RAC' THEN 1 END)
+    INTO booked_seats, waitlisted_count, rac_count
+    FROM PASSENGER_TICKET pt
+    JOIN TICKET t ON pt.ticket_id = t.ticket_id
+    WHERE t.journey_id = journey_id
+    AND t.booking_status != 'Cancelled';
+    
+    SET available_seats = total_seats - booked_seats;
+    
+    SELECT JSON_OBJECT(
+        'journey_id', journey_id,
+        'class_id', class_id,
+        'total_seats', total_seats,
+        'booked_seats', booked_seats,
+        'available_seats', available_seats,
+        'rac_count', rac_count,
+        'waitlisted_count', waitlisted_count
+    ) INTO seats_data;
+    
+    RETURN seats_data;
+END//
+DELIMITER ;
+
+-- 4. List all passengers traveling on a specific train on a given date.
+DELIMITER //
+CREATE PROCEDURE list_train_passengers(IN train_id_param INT, IN journey_date_param DATE)
+BEGIN
+    SELECT 
+        p.passenger_id,
+        p.name,
+        p.age,
+        p.gender,
+        p.contact_number,
+        p.email,
+        pt.seat_number,
+        pt.berth_type,
+        pt.status,
+        c.class_name,
+        c.class_code,
+        t.pnr_number,
+        j.journey_id,
+        s.schedule_id,
+        tr.train_number,
+        tr.train_name,
+        src.station_name as source_station,
+        dst.station_name as destination_station
+    FROM PASSENGER p
+    JOIN PASSENGER_TICKET pt ON p.passenger_id = pt.passenger_id
+    JOIN TICKET t ON pt.ticket_id = t.ticket_id
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN CLASS c ON j.class_id = c.class_id
+    JOIN STATION src ON j.source_station_id = src.station_id
+    JOIN STATION dst ON j.destination_station_id = dst.station_id
+    WHERE tr.train_id = train_id_param
+    AND s.journey_date = journey_date_param
+    AND t.booking_status != 'Cancelled'
+    ORDER BY c.class_name, pt.seat_number;
+END//
+DELIMITER ;
+
+-- 5. Retrieve all waitlisted passengers for a particular train.
+DELIMITER //
+CREATE PROCEDURE get_waitlisted_passengers(IN train_id_param INT, IN journey_date_param DATE)
+BEGIN
+    SELECT 
+        p.passenger_id,
+        p.name,
+        p.age,
+        p.gender,
+        p.contact_number,
+        p.email,
+        pt.waitlist_number,
+        c.class_name,
+        c.class_code,
+        t.pnr_number,
+        j.journey_id,
+        tr.train_number,
+        tr.train_name,
+        src.station_name as source_station,
+        dst.station_name as destination_station
+    FROM PASSENGER p
+    JOIN PASSENGER_TICKET pt ON p.passenger_id = pt.passenger_id
+    JOIN TICKET t ON pt.ticket_id = t.ticket_id
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN CLASS c ON j.class_id = c.class_id
+    JOIN STATION src ON j.source_station_id = src.station_id
+    JOIN STATION dst ON j.destination_station_id = dst.station_id
+    WHERE tr.train_id = train_id_param
+    AND s.journey_date = journey_date_param
+    AND pt.status = 'WAITLISTED'
+    ORDER BY pt.waitlist_number;
+END//
+DELIMITER ;
+
+-- 6. Find total amount that needs to be refunded for cancelling a train.
+DELIMITER //
+CREATE FUNCTION calculate_refund_amount(schedule_id INT)
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    DECLARE total_refund DECIMAL(10,2);
+    
+    SELECT SUM(t.total_fare) INTO total_refund
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    WHERE j.schedule_id = schedule_id
+    AND t.booking_status != 'Cancelled';
+    
+    RETURN COALESCE(total_refund, 0.00);
+END//
+DELIMITER ;
+
+-- Trigger to automatically update booking status when train is cancelled
+DELIMITER //
+CREATE TRIGGER after_train_cancelled
+AFTER UPDATE ON SCHEDULE
+FOR EACH ROW
+BEGIN
+    IF NEW.status = 'Cancelled' AND OLD.status != 'Cancelled' THEN
+        -- Mark all tickets as cancelled
+        UPDATE TICKET t
+        JOIN JOURNEY j ON t.journey_id = j.journey_id
+        SET t.booking_status = 'Cancelled', 
+            t.cancellation_reason = 'Train cancelled by railways'
+        WHERE j.schedule_id = NEW.schedule_id
+        AND t.booking_status != 'Cancelled';
+    END IF;
+END//
+DELIMITER ;
+
+-- 7. Total revenue generated from ticket bookings over a specified period.
+DELIMITER //
+CREATE FUNCTION calculate_revenue(start_date DATE, end_date DATE)
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    DECLARE total_revenue DECIMAL(10,2);
+    
+    SELECT SUM(t.total_fare) INTO total_revenue
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    WHERE s.journey_date BETWEEN start_date AND end_date
+    AND t.booking_status != 'Cancelled';
+    
+    RETURN COALESCE(total_revenue, 0.00);
+END//
+DELIMITER ;
+
+-- 8. Cancellation records with refund status.
+DELIMITER //
+CREATE PROCEDURE get_cancellation_records(IN start_date DATE, IN end_date DATE)
+BEGIN
+    SELECT 
+        t.ticket_id,
+        t.pnr_number,
+        t.booking_date,
+        t.cancellation_date,
+        t.booking_status,
+        t.total_fare,
+        t.refund_amount,
+        t.cancellation_reason,
+        tr.train_number,
+        tr.train_name,
+        s.journey_date,
+        COUNT(pt.passenger_id) AS passenger_count
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+    WHERE t.booking_status = 'Cancelled'
+    AND t.cancellation_date BETWEEN start_date AND end_date
+    GROUP BY t.ticket_id
+    ORDER BY t.cancellation_date DESC;
+END//
+DELIMITER ;
+
+-- 9. Find the busiest route based on passenger count.
+DELIMITER //
+CREATE FUNCTION get_busiest_route(start_date DATE, end_date DATE)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE route_data JSON;
+    
+    SELECT JSON_OBJECT(
+        'source_station', src.station_name,
+        'destination_station', dest.station_name,
+        'passenger_count', COUNT(pt.passenger_id),
+        'train_count', COUNT(DISTINCT tr.train_id),
+        'most_popular_train', (
+            SELECT JSON_OBJECT(
+                'train_id', pop_train.train_id,
+                'train_number', pop_train.train_number,
+                'train_name', pop_train.train_name,
+                'passenger_count', COUNT(pop_pt.passenger_id)
+            )
+            FROM PASSENGER_TICKET pop_pt
+            JOIN TICKET pop_t ON pop_pt.ticket_id = pop_t.ticket_id
+            JOIN JOURNEY pop_j ON pop_t.journey_id = pop_j.journey_id
+            JOIN SCHEDULE pop_s ON pop_j.schedule_id = pop_s.schedule_id
+            JOIN TRAIN pop_train ON pop_s.train_id = pop_train.train_id
+            WHERE pop_j.source_station_id = j.source_station_id
+            AND pop_j.destination_station_id = j.destination_station_id
+            AND pop_s.journey_date BETWEEN start_date AND end_date
+            GROUP BY pop_train.train_id
+            ORDER BY COUNT(pop_pt.passenger_id) DESC
+            LIMIT 1
+        )
+    ) INTO route_data
+    FROM PASSENGER_TICKET pt
+    JOIN TICKET t ON pt.ticket_id = t.ticket_id
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN STATION src ON j.source_station_id = src.station_id
+    JOIN STATION dest ON j.destination_station_id = dest.station_id
+    WHERE s.journey_date BETWEEN start_date AND end_date
+    AND t.booking_status != 'Cancelled'
+    GROUP BY j.source_station_id, j.destination_station_id
+    ORDER BY COUNT(pt.passenger_id) DESC
+    LIMIT 1;
+    
+    RETURN route_data;
+END//
+DELIMITER ;
+
+-- 10. Generate an itemized bill for a ticket including all charges.
+DELIMITER //
+CREATE FUNCTION generate_itemized_bill(ticket_id INT)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE bill_data JSON;
+    DECLARE journey_distance DECIMAL(10,2);
+    DECLARE base_fare DECIMAL(10,2);
+    DECLARE passenger_count INT;
+    DECLARE reservation_fee DECIMAL(10,2) DEFAULT 60.00;
+    DECLARE fuel_surcharge_rate DECIMAL(10,2) DEFAULT 0.05;
+    DECLARE catering_charges DECIMAL(10,2) DEFAULT 250.00;
+    DECLARE superfast_charge DECIMAL(10,2) DEFAULT 75.00;
+    DECLARE gst_rate DECIMAL(10,2) DEFAULT 0.05;
+    
+    -- Get journey distance
+    SELECT 
+        ABS(rs_dest.distance_from_source - rs_src.distance_from_source) INTO journey_distance
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN ROUTE_SEGMENT rs_src ON tr.train_id = rs_src.train_id AND j.source_station_id = rs_src.station_id
+    JOIN ROUTE_SEGMENT rs_dest ON tr.train_id = rs_dest.train_id AND j.destination_station_id = rs_dest.station_id
+    WHERE t.ticket_id = ticket_id;
+    
+    -- Get base fare
+    SELECT 
+        sc.fare_per_km * journey_distance INTO base_fare
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN SEAT_CONFIGURATION sc ON s.train_id = sc.train_id AND j.class_id = sc.class_id
+    WHERE t.ticket_id = ticket_id;
+    
+    -- Get passenger count
+    SELECT COUNT(*) INTO passenger_count
+    FROM PASSENGER_TICKET pt
+    WHERE pt.ticket_id = ticket_id;
+    
+    -- Calculate costs
+    SET base_fare = base_fare * passenger_count;
+    SET reservation_fee = reservation_fee * passenger_count;
+    SET fuel_surcharge_rate = base_fare * fuel_surcharge_rate;
+    SET catering_charges = IF(journey_distance > 500, catering_charges, 0);
+    SET superfast_charge = superfast_charge * passenger_count;
+    
+    -- Calculate GST
+    SET gst_rate = (base_fare + reservation_fee + fuel_surcharge_rate + superfast_charge) * gst_rate;
+    
+    -- Create bill data
+    SELECT JSON_OBJECT(
+        'ticket_id', t.ticket_id,
+        'pnr_number', t.pnr_number,
+        'booking_date', t.booking_date,
+        'journey_details', JSON_OBJECT(
+            'train_number', tr.train_number,
+            'train_name', tr.train_name,
+            'journey_date', s.journey_date,
+            'source_station', src.station_name,
+            'destination_station', dest.station_name,
+            'class_name', c.class_name,
+            'journey_distance', journey_distance
+        ),
+        'passenger_count', passenger_count,
+        'fare_details', JSON_OBJECT(
+            'base_fare', base_fare,
+            'reservation_fee', reservation_fee,
+            'fuel_surcharge', fuel_surcharge_rate,
+            'catering_charges', catering_charges,
+            'superfast_charge', superfast_charge,
+            'gst', gst_rate,
+            'total_fare', base_fare + reservation_fee + fuel_surcharge_rate + catering_charges + superfast_charge + gst_rate
+        ),
+        'passengers', (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT(
+                    'passenger_id', p.passenger_id,
+                    'name', p.name,
+                    'age', p.age,
+                    'seat_number', pt.seat_number,
+                    'berth_type', pt.berth_type,
+                    'status', pt.status
+                )
+            )
+            FROM PASSENGER_TICKET pt
+            JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+            WHERE pt.ticket_id = t.ticket_id
+        )
+    ) INTO bill_data
+    FROM TICKET t
+    JOIN JOURNEY j ON t.journey_id = j.journey_id
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN STATION src ON j.source_station_id = src.station_id
+    JOIN STATION dest ON j.destination_station_id = dest.station_id
+    JOIN CLASS c ON j.class_id = c.class_id
+    WHERE t.ticket_id = ticket_id;
+    
+    RETURN bill_data;
+END//
+DELIMITER ;
+
+-- Additional Useful Triggers
+
+-- Trigger to automatically update RAC and waitlist when ticket is cancelled
+DELIMITER //
+CREATE TRIGGER after_ticket_cancelled
+AFTER UPDATE ON TICKET
+FOR EACH ROW
+BEGIN
+    DECLARE journey_id_val INT;
+    
+    IF NEW.booking_status = 'Cancelled' AND OLD.booking_status != 'Cancelled' THEN
+        -- Get journey_id
+        SET journey_id_val = NEW.journey_id;
+        
+        -- For each cancelled confirmed seat, promote one RAC ticket
+        UPDATE PASSENGER_TICKET pt
+        JOIN PASSENGER_TICKET rac_pt ON rac_pt.status = 'RAC'
+        JOIN TICKET rac_t ON rac_pt.ticket_id = rac_t.ticket_id
+        SET pt.status = 'CANCELLED'
+        WHERE pt.ticket_id = NEW.ticket_id;
+        
+        -- Promote RAC to confirmed
+        UPDATE PASSENGER_TICKET pt
+        JOIN TICKET t ON pt.ticket_id = t.ticket_id
+        SET pt.status = 'CONFIRMED'
+        WHERE t.journey_id = journey_id_val
+        AND pt.status = 'RAC'
+        LIMIT (SELECT COUNT(*) FROM PASSENGER_TICKET WHERE ticket_id = NEW.ticket_id AND status = 'CONFIRMED');
+        
+        -- Promote waitlist to RAC
+        UPDATE PASSENGER_TICKET pt
+        JOIN TICKET t ON pt.ticket_id = t.ticket_id
+        SET pt.status = 'RAC'
+        WHERE t.journey_id = journey_id_val
+        AND pt.status = 'WAITLISTED'
+        ORDER BY pt.waitlist_number
+        LIMIT (SELECT COUNT(*) FROM PASSENGER_TICKET WHERE ticket_id = NEW.ticket_id AND status = 'RAC');
+        
+        -- Reorder waitlist numbers
+        SET @row_number = 0;
+        UPDATE PASSENGER_TICKET pt
+        JOIN TICKET t ON pt.ticket_id = t.ticket_id
+        SET pt.waitlist_number = (@row_number:=@row_number+1)
+        WHERE t.journey_id = journey_id_val
+        AND pt.status = 'WAITLISTED'
+        ORDER BY pt.waitlist_number;
+    END IF;
+END//
+DELIMITER ;
+
+-- Trigger to automatically update current_waitlist_number in WAITLIST table
+DELIMITER //
+CREATE TRIGGER after_passenger_ticket_insert
+AFTER INSERT ON PASSENGER_TICKET
+FOR EACH ROW
+BEGIN
+    DECLARE journey_id_val INT;
+    
+    IF NEW.status = 'WAITLISTED' THEN
+        -- Get journey_id
+        SELECT t.journey_id INTO journey_id_val
+        FROM TICKET t
+        WHERE t.ticket_id = NEW.ticket_id;
+        
+        -- Update current_waitlist_number
+        UPDATE WAITLIST
+        SET current_waitlist_number = NEW.waitlist_number + 1
+        WHERE journey_id = journey_id_val
+        AND current_waitlist_number <= NEW.waitlist_number;
+    END IF;
+END//
+DELIMITER ; 
