@@ -27,17 +27,77 @@ export async function GET(req: NextRequest) {
 
 async function getAllStats(startDate: string, endDate: string) {
   try {
+    const [
+      pnrStats,
+      scheduleStats,
+      seatsStats, 
+      passengersStats,
+      waitlistedStats,
+      refundsStats,
+      revenueStats,
+      cancellationStats,
+      popularRoutesStats,
+      billingStats,
+      occupancyTrends,
+      revenueByTrainType,
+      peakTravelTimes,
+      passengerDemographics,
+      paymentAnalytics,
+      stationAnalytics,
+      trainPerformance,
+      classWiseAnalytics,
+      bookingPatterns
+    ] = await Promise.all([
+      getPnrStats(startDate, endDate),
+      getScheduleStats(startDate, endDate),
+      getSeatsStats(startDate, endDate),
+      getPassengersStats(startDate, endDate),
+      getWaitlistedStats(startDate, endDate),
+      getRefundsStats(startDate, endDate),
+      getRevenueStats(startDate, endDate),
+      getCancellationStats(startDate, endDate),
+      getPopularRoutesStats(startDate, endDate),
+      getBillingStats(startDate, endDate),
+      getOccupancyTrendsByClass(startDate, endDate),
+      getRevenueByTrainType(startDate, endDate),
+      getPeakTravelTimes(startDate, endDate),
+      getPassengerDemographics(startDate, endDate),
+      getRevenueByPaymentMethod(startDate, endDate),
+      getStationAnalytics(startDate, endDate),
+      getTrainPerformanceAnalytics(startDate, endDate),
+      getClassWiseAnalytics(startDate, endDate),
+      getBookingPatterns(startDate, endDate)
+    ]);
+
+    // Calculate percentages for revenue by train type
+    if (revenueByTrainType.length > 0) {
+      const totalRevenue = revenueByTrainType.reduce((sum, item) => sum + item.total_revenue, 0);
+      revenueByTrainType.forEach(item => {
+        item.percentage = totalRevenue > 0 ? Math.round((item.total_revenue / totalRevenue) * 100) : 0;
+      });
+    }
+    
     return {
-      pnr: await getPnrStats(startDate, endDate),
-      schedule: await getScheduleStats(startDate, endDate),
-      seats: await getSeatsStats(startDate, endDate),
-      passengers: await getPassengersStats(startDate, endDate),
-      waitlisted: await getWaitlistedStats(startDate, endDate),
-      refunds: await getRefundsStats(startDate, endDate),
-      revenue: await getRevenueStats(startDate, endDate),
-      cancellations: await getCancellationStats(startDate, endDate),
-      routes: await getPopularRoutesStats(startDate, endDate),
-      bill: await getBillingStats(startDate, endDate)
+      pnr: pnrStats,
+      schedule: scheduleStats,
+      seats: seatsStats,
+      passengers: passengersStats,
+      waitlisted: waitlistedStats,
+      refunds: refundsStats,
+      revenue: revenueStats,
+      cancellations: cancellationStats,
+      routes: popularRoutesStats,
+      bill: billingStats,
+      // New analytics
+      occupancy_trends: occupancyTrends,
+      revenue_by_train_type: revenueByTrainType,
+      peak_travel_times: peakTravelTimes,
+      passenger_demographics: passengerDemographics,
+      payment_analytics: paymentAnalytics,
+      station_analytics: stationAnalytics,
+      train_performance: trainPerformance,
+      class_analytics: classWiseAnalytics,
+      booking_patterns: bookingPatterns
     };
   } catch (error) {
     console.error('Error getting all stats:', error);
@@ -524,7 +584,9 @@ async function getBillingStats(startDate: string, endDate: string) {
   }
 }
 
-// Helper functions
+/**
+ * Helper function to get a date N days ago in YYYY-MM-DD format
+ */
 function getDateDaysAgo(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() - days);
@@ -799,5 +861,729 @@ async function getUniqueTicketCount(startDate: string, endDate: string): Promise
   } catch (error) {
     console.error('Error getting unique ticket count:', error);
     return 0;
+  }
+}
+
+// Add these new analytics functions before the end of the file
+async function getOccupancyTrendsByClass(startDate: string, endDate: string) {
+  try {
+    const sqlQuery = `
+      SELECT 
+        c.class_name,
+        c.class_code,
+        DATE(t.journey_date) as travel_date,
+        COUNT(pt.passenger_ticket_id) as passenger_count,
+        SUM(CASE WHEN pt.status = 'Confirmed' THEN 1 ELSE 0 END) as confirmed_count,
+        SUM(CASE WHEN pt.status = 'Waitlisted' THEN 1 ELSE 0 END) as waitlist_count
+      FROM PASSENGER_TICKET pt
+      JOIN TICKET t ON pt.ticket_id = t.ticket_id
+      JOIN JOURNEY j ON t.journey_id = j.journey_id
+      JOIN CLASS c ON j.class_id = c.class_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      GROUP BY c.class_id, DATE(t.journey_date)
+      ORDER BY travel_date, c.class_id
+    `;
+    
+    const results = await query(sqlQuery, [startDate, endDate]);
+    const trendData = results as RowDataPacket[];
+    
+    // Process the data to create a more useful format
+    const classes = [...new Set(trendData.map(item => item.class_code))];
+    const dates = [...new Set(trendData.map(item => item.travel_date))].sort();
+    
+    const formattedTrends = classes.map(classCode => {
+      const classData = trendData.filter(item => item.class_code === classCode);
+      const className = classData.length > 0 ? classData[0].class_name : classCode;
+      
+      return {
+        class_code: classCode,
+        class_name: className,
+        data: dates.map(date => {
+          const dataPoint = classData.find(item => item.travel_date.toString() === date.toString()) || {
+            passenger_count: 0,
+            confirmed_count: 0,
+            waitlist_count: 0
+          };
+          
+          return {
+            date,
+            total: dataPoint.passenger_count || 0,
+            confirmed: dataPoint.confirmed_count || 0,
+            waitlisted: dataPoint.waitlist_count || 0
+          };
+        })
+      };
+    });
+    
+    return {
+      trends: formattedTrends,
+      dates
+    };
+  } catch (error) {
+    console.error('Error getting occupancy trends:', error);
+    return {
+      trends: [],
+      dates: []
+    };
+  }
+}
+
+async function getRevenueByTrainType(startDate: string, endDate: string) {
+  try {
+    const sqlQuery = `
+      SELECT 
+        tr.train_type,
+        COUNT(t.ticket_id) as ticket_count,
+        SUM(t.total_fare) as total_revenue
+      FROM TICKET t
+      JOIN JOURNEY j ON t.journey_id = j.journey_id
+      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+      JOIN TRAIN tr ON s.train_id = tr.train_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY tr.train_type
+      ORDER BY total_revenue DESC
+    `;
+    
+    const results = await query(sqlQuery, [startDate, endDate]);
+    const formattedResults = (results as RowDataPacket[]).map(item => ({
+      train_type: item.train_type,
+      ticket_count: item.ticket_count,
+      total_revenue: item.total_revenue || 0,
+      percentage: 0 // This will be calculated in getAllStats
+    }));
+    
+    return formattedResults;
+  } catch (error) {
+    console.error('Error getting revenue by train type:', error);
+    return [];
+  }
+}
+
+async function getPeakTravelTimes(startDate: string, endDate: string) {
+  try {
+    // Get hourly distribution
+    const hourlyQuerySql = `
+      SELECT 
+        HOUR(s.departure_time) as hour_of_day,
+        COUNT(t.ticket_id) as ticket_count,
+        COUNT(DISTINCT pt.passenger_id) as passenger_count
+      FROM TICKET t
+      JOIN JOURNEY j ON t.journey_id = j.journey_id
+      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY HOUR(s.departure_time)
+      ORDER BY hour_of_day
+    `;
+    
+    // Get weekday distribution
+    const weekdayQuerySql = `
+      SELECT 
+        WEEKDAY(s.journey_date) as day_of_week,
+        COUNT(t.ticket_id) as ticket_count,
+        COUNT(DISTINCT pt.passenger_id) as passenger_count
+      FROM TICKET t
+      JOIN JOURNEY j ON t.journey_id = j.journey_id
+      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY WEEKDAY(s.journey_date)
+      ORDER BY day_of_week
+    `;
+    
+    const [hourlyResults, weekdayResults] = await Promise.all([
+      query(hourlyQuerySql, [startDate, endDate]),
+      query(weekdayQuerySql, [startDate, endDate])
+    ]);
+    
+    // Map weekday numbers to names
+    const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    
+    const hourlyDistribution = (hourlyResults as RowDataPacket[]).map(item => ({
+      hour: item.hour_of_day,
+      hour_formatted: `${item.hour_of_day}:00`,
+      ticket_count: item.ticket_count,
+      passenger_count: item.passenger_count
+    }));
+    
+    const weekdayDistribution = (weekdayResults as RowDataPacket[]).map(item => ({
+      day: item.day_of_week,
+      day_name: weekdayNames[item.day_of_week],
+      ticket_count: item.ticket_count,
+      passenger_count: item.passenger_count
+    }));
+    
+    return {
+      hourly: hourlyDistribution,
+      weekday: weekdayDistribution
+    };
+  } catch (error) {
+    console.error('Error getting peak travel times:', error);
+    return {
+      hourly: [],
+      weekday: []
+    };
+  }
+}
+
+async function getPassengerDemographics(startDate: string, endDate: string) {
+  try {
+    // Get age distribution
+    const ageQuerySql = `
+      SELECT 
+        CASE
+          WHEN p.age < 13 THEN 'Child (0-12)'
+          WHEN p.age BETWEEN 13 AND 17 THEN 'Teen (13-17)'
+          WHEN p.age BETWEEN 18 AND 25 THEN 'Young Adult (18-25)'
+          WHEN p.age BETWEEN 26 AND 40 THEN 'Adult (26-40)'
+          WHEN p.age BETWEEN 41 AND 60 THEN 'Middle-aged (41-60)'
+          ELSE 'Senior (60+)'
+        END as age_group,
+        COUNT(*) as count
+      FROM PASSENGER p
+      JOIN PASSENGER_TICKET pt ON p.passenger_id = pt.passenger_id
+      JOIN TICKET t ON pt.ticket_id = t.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY age_group
+      ORDER BY 
+        CASE age_group
+          WHEN 'Child (0-12)' THEN 1
+          WHEN 'Teen (13-17)' THEN 2
+          WHEN 'Young Adult (18-25)' THEN 3
+          WHEN 'Adult (26-40)' THEN 4
+          WHEN 'Middle-aged (41-60)' THEN 5
+          ELSE 6
+        END
+    `;
+    
+    // Get gender distribution
+    const genderQuerySql = `
+      SELECT 
+        p.gender,
+        COUNT(*) as count
+      FROM PASSENGER p
+      JOIN PASSENGER_TICKET pt ON p.passenger_id = pt.passenger_id
+      JOIN TICKET t ON pt.ticket_id = t.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY p.gender
+    `;
+    
+    // Get concession category distribution
+    const concessionQuerySql = `
+      SELECT 
+        IFNULL(p.concession_category, 'Regular') as category,
+        COUNT(*) as count
+      FROM PASSENGER p
+      JOIN PASSENGER_TICKET pt ON p.passenger_id = pt.passenger_id
+      JOIN TICKET t ON pt.ticket_id = t.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY p.concession_category
+    `;
+    
+    const [ageResults, genderResults, concessionResults] = await Promise.all([
+      query(ageQuerySql, [startDate, endDate]),
+      query(genderQuerySql, [startDate, endDate]),
+      query(concessionQuerySql, [startDate, endDate])
+    ]);
+    
+    return {
+      age_distribution: ageResults as RowDataPacket[],
+      gender_distribution: genderResults as RowDataPacket[],
+      concession_distribution: concessionResults as RowDataPacket[]
+    };
+  } catch (error) {
+    console.error('Error getting passenger demographics:', error);
+    return {
+      age_distribution: [],
+      gender_distribution: [],
+      concession_distribution: []
+    };
+  }
+}
+
+/**
+ * Get revenue analytics by payment method
+ */
+async function getRevenueByPaymentMethod(startDate: string, endDate: string) {
+  try {
+    // Get revenue by payment method
+    const paymentMethodQuery = `
+      SELECT 
+        p.payment_mode,
+        COUNT(p.payment_id) as transaction_count,
+        SUM(p.amount) as total_amount,
+        AVG(p.amount) as average_amount
+      FROM PAYMENT p
+      JOIN TICKET t ON p.ticket_id = t.ticket_id
+      WHERE p.payment_date BETWEEN ? AND ?
+      AND p.status = 'Success'
+      AND t.booking_status != 'Cancelled'
+      GROUP BY p.payment_mode
+      ORDER BY total_amount DESC
+    `;
+    
+    // Get monthly trends by payment method
+    const monthlyTrendQuery = `
+      SELECT 
+        p.payment_mode,
+        DATE_FORMAT(p.payment_date, '%Y-%m') as month,
+        COUNT(p.payment_id) as transaction_count,
+        SUM(p.amount) as total_amount
+      FROM PAYMENT p
+      JOIN TICKET t ON p.ticket_id = t.ticket_id
+      WHERE p.payment_date BETWEEN ? AND ?
+      AND p.status = 'Success'
+      AND t.booking_status != 'Cancelled'
+      GROUP BY p.payment_mode, month
+      ORDER BY month, total_amount DESC
+    `;
+    
+    // Get average processing time by payment method
+    const processingTimeQuery = `
+      SELECT 
+        p.payment_mode,
+        AVG(TIMESTAMPDIFF(SECOND, t.booking_date, p.payment_date)) as avg_processing_seconds
+      FROM PAYMENT p
+      JOIN TICKET t ON p.ticket_id = t.ticket_id
+      WHERE p.payment_date BETWEEN ? AND ?
+      AND p.status = 'Success'
+      AND t.booking_status != 'Cancelled'
+      GROUP BY p.payment_mode
+      ORDER BY avg_processing_seconds
+    `;
+    
+    const [methodResults, trendResults, timeResults] = await Promise.all([
+      query(paymentMethodQuery, [startDate, endDate]),
+      query(monthlyTrendQuery, [startDate, endDate]),
+      query(processingTimeQuery, [startDate, endDate])
+    ]);
+    
+    // Process payment method results and calculate percentages
+    const paymentMethods = methodResults as RowDataPacket[];
+    const totalRevenue = paymentMethods.reduce((sum, method) => sum + method.total_amount, 0);
+    const methodsWithPercentage = paymentMethods.map(method => ({
+      payment_method: method.payment_mode,
+      transaction_count: method.transaction_count,
+      total_amount: method.total_amount,
+      average_amount: method.average_amount,
+      percentage: totalRevenue > 0 ? Math.round((method.total_amount / totalRevenue) * 100) : 0
+    }));
+    
+    // Process monthly trend data
+    const monthlyTrends = trendResults as RowDataPacket[];
+    const months = [...new Set(monthlyTrends.map(item => item.month))].sort();
+    const paymentTypes = [...new Set(monthlyTrends.map(item => item.payment_mode))];
+    
+    const formattedTrends = months.map(month => {
+      const methodsForMonth = monthlyTrends.filter(item => item.month === month);
+      
+      return {
+        month,
+        methods: paymentTypes.map(paymentMode => {
+          const dataForMethod = methodsForMonth.find(item => item.payment_mode === paymentMode);
+          return {
+            payment_method: paymentMode,
+            method: paymentMode,
+            transactions: dataForMethod?.transaction_count || 0,
+            amount: dataForMethod?.total_amount || 0
+          };
+        })
+      };
+    });
+    
+    // Process processing time data
+    const processingTimes = (timeResults as RowDataPacket[]).map(item => ({
+      payment_method: item.payment_mode,
+      avg_seconds: Math.round(item.avg_processing_seconds || 0),
+      avg_formatted: formatProcessingTime(item.avg_processing_seconds || 0)
+    }));
+    
+    return {
+      by_method: methodsWithPercentage,
+      monthly_trends: formattedTrends,
+      processing_times: processingTimes
+    };
+  } catch (error) {
+    console.error('Error getting revenue by payment method:', error);
+    return {
+      by_method: [],
+      monthly_trends: [],
+      processing_times: []
+    };
+  }
+}
+
+/**
+ * Format processing time from seconds to a human-readable format
+ */
+function formatProcessingTime(seconds: number): string {
+  if (seconds < 60) {
+    return `${Math.round(seconds)} seconds`;
+  } else if (seconds < 3600) {
+    return `${Math.round(seconds / 60)} minutes`;
+  } else {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.round((seconds % 3600) / 60);
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'}${minutes > 0 ? ` ${minutes} minutes` : ''}`;
+  }
+}
+
+async function getStationAnalytics(startDate: string, endDate: string) {
+  try {
+    // Get most used stations (by departures)
+    const departureStationsQuery = `
+      SELECT 
+        s.station_id,
+        s.station_name,
+        s.station_code,
+        s.city,
+        s.state,
+        COUNT(j.journey_id) as departure_count
+      FROM STATION s
+      JOIN JOURNEY j ON s.station_id = j.source_station_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY s.station_id
+      ORDER BY departure_count DESC
+      LIMIT 10
+    `;
+    
+    // Get most used stations (by arrivals)
+    const arrivalStationsQuery = `
+      SELECT 
+        s.station_id,
+        s.station_name,
+        s.station_code,
+        s.city,
+        s.state,
+        COUNT(j.journey_id) as arrival_count
+      FROM STATION s
+      JOIN JOURNEY j ON s.station_id = j.destination_station_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY s.station_id
+      ORDER BY arrival_count DESC
+      LIMIT 10
+    `;
+    
+    // Get most popular routes
+    const popularRoutesQuery = `
+      SELECT 
+        src.station_name as source_station,
+        dst.station_name as destination_station,
+        src.city as source_city,
+        dst.city as destination_city,
+        COUNT(j.journey_id) as journey_count
+      FROM JOURNEY j
+      JOIN STATION src ON j.source_station_id = src.station_id
+      JOIN STATION dst ON j.destination_station_id = dst.station_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY j.source_station_id, j.destination_station_id
+      ORDER BY journey_count DESC
+      LIMIT 10
+    `;
+    
+    const [departureResults, arrivalResults, routeResults] = await Promise.all([
+      query(departureStationsQuery, [startDate, endDate]),
+      query(arrivalStationsQuery, [startDate, endDate]),
+      query(popularRoutesQuery, [startDate, endDate])
+    ]);
+    
+    return {
+      top_departure_stations: departureResults as RowDataPacket[],
+      top_arrival_stations: arrivalResults as RowDataPacket[],
+      popular_routes: routeResults as RowDataPacket[]
+    };
+  } catch (error) {
+    console.error('Error getting station analytics:', error);
+    return {
+      top_departure_stations: [],
+      top_arrival_stations: [],
+      popular_routes: []
+    };
+  }
+}
+
+async function getTrainPerformanceAnalytics(startDate: string, endDate: string) {
+  try {
+    // Get most used trains
+    const mostUsedTrainsQuery = `
+      SELECT 
+        t.train_id,
+        t.train_number,
+        t.train_name,
+        t.train_type,
+        COUNT(j.journey_id) as journey_count,
+        SUM(tk.total_fare) as total_revenue
+      FROM TRAIN t
+      JOIN SCHEDULE sc ON t.train_id = sc.train_id
+      JOIN JOURNEY j ON sc.schedule_id = j.schedule_id
+      JOIN TICKET tk ON j.journey_id = tk.journey_id
+      WHERE tk.booking_date BETWEEN ? AND ?
+      AND tk.booking_status != 'Cancelled'
+      GROUP BY t.train_id
+      ORDER BY journey_count DESC
+      LIMIT 15
+    `;
+    
+    // Get on-time performance by train
+    const onTimePerformanceQuery = `
+      SELECT 
+        t.train_id,
+        t.train_number,
+        t.train_name,
+        t.train_type,
+        COUNT(sc.schedule_id) as total_trips,
+        SUM(CASE WHEN sc.status = 'On Time' THEN 1 ELSE 0 END) as ontime_trips,
+        SUM(CASE WHEN sc.status = 'Delayed' THEN 1 ELSE 0 END) as delayed_trips,
+        AVG(CASE WHEN sc.status = 'Delayed' THEN sc.delay_time ELSE 0 END) as avg_delay_minutes
+      FROM TRAIN t
+      JOIN SCHEDULE sc ON t.train_id = sc.train_id
+      WHERE sc.journey_date BETWEEN ? AND ?
+      GROUP BY t.train_id
+      ORDER BY (ontime_trips / total_trips) DESC
+      LIMIT 15
+    `;
+    
+    const [usageResults, performanceResults] = await Promise.all([
+      query(mostUsedTrainsQuery, [startDate, endDate]),
+      query(onTimePerformanceQuery, [startDate, endDate])
+    ]);
+    
+    // Calculate on-time percentage for each train
+    const trainsWithPerformance = (performanceResults as RowDataPacket[]).map(train => ({
+      ...train,
+      ontime_percentage: train.total_trips > 0 ? Math.round((train.ontime_trips / train.total_trips) * 100) : 0
+    }));
+    
+    return {
+      most_used_trains: usageResults as RowDataPacket[],
+      train_performance: trainsWithPerformance
+    };
+  } catch (error) {
+    console.error('Error getting train performance analytics:', error);
+    return {
+      most_used_trains: [],
+      train_performance: []
+    };
+  }
+}
+
+async function getClassWiseAnalytics(startDate: string, endDate: string) {
+  try {
+    // Get class usage statistics
+    const classUsageQuery = `
+      SELECT 
+        c.class_id,
+        c.class_name,
+        c.class_code,
+        COUNT(j.journey_id) as journey_count,
+        SUM(t.total_fare) as total_revenue,
+        COUNT(DISTINCT pt.passenger_ticket_id) as passenger_count
+      FROM CLASS c
+      JOIN JOURNEY j ON c.class_id = j.class_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY c.class_id
+      ORDER BY passenger_count DESC
+    `;
+    
+    // Get class occupancy trends over time
+    const classOccupancyQuery = `
+      SELECT 
+        c.class_id,
+        c.class_name, 
+        c.class_code,
+        DATE(t.booking_date) as booking_date,
+        COUNT(pt.passenger_ticket_id) as passengers,
+        SUM(CASE WHEN pt.status = 'Confirmed' THEN 1 ELSE 0 END) as confirmed,
+        SUM(CASE WHEN pt.status = 'Waitlisted' THEN 1 ELSE 0 END) as waitlisted,
+        SUM(CASE WHEN pt.status = 'RAC' THEN 1 ELSE 0 END) as rac
+      FROM CLASS c
+      JOIN JOURNEY j ON c.class_id = j.class_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      GROUP BY c.class_id, DATE(t.booking_date)
+      ORDER BY booking_date, c.class_id
+    `;
+    
+    // Get berth type preferences by class
+    const berthPreferenceQuery = `
+      SELECT 
+        c.class_id,
+        c.class_name,
+        c.class_code,
+        pt.berth_type,
+        COUNT(pt.passenger_ticket_id) as count
+      FROM CLASS c
+      JOIN JOURNEY j ON c.class_id = j.class_id
+      JOIN TICKET t ON j.journey_id = t.journey_id
+      JOIN PASSENGER_TICKET pt ON t.ticket_id = pt.ticket_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      AND pt.status = 'Confirmed'
+      AND pt.berth_type IS NOT NULL
+      GROUP BY c.class_id, pt.berth_type
+      ORDER BY c.class_id, count DESC
+    `;
+    
+    const [classUsageResults, occupancyResults, berthResults] = await Promise.all([
+      query(classUsageQuery, [startDate, endDate]),
+      query(classOccupancyQuery, [startDate, endDate]),
+      query(berthPreferenceQuery, [startDate, endDate])
+    ]);
+    
+    // Process occupancy data to format by class
+    const classes = new Map();
+    (occupancyResults as RowDataPacket[]).forEach(row => {
+      if (!classes.has(row.class_id)) {
+        classes.set(row.class_id, {
+          class_id: row.class_id,
+          class_name: row.class_name,
+          class_code: row.class_code,
+          days: []
+        });
+      }
+      
+      classes.get(row.class_id).days.push({
+        date: row.booking_date,
+        total: row.passengers,
+        confirmed: row.confirmed,
+        waitlisted: row.waitlisted,
+        rac: row.rac
+      });
+    });
+    
+    // Process berth preference data by class
+    const berthPreferences = new Map();
+    (berthResults as RowDataPacket[]).forEach(row => {
+      if (!berthPreferences.has(row.class_id)) {
+        berthPreferences.set(row.class_id, {
+          class_id: row.class_id,
+          class_name: row.class_name,
+          class_code: row.class_code,
+          preferences: []
+        });
+      }
+      
+      berthPreferences.get(row.class_id).preferences.push({
+        berth_type: row.berth_type,
+        count: row.count
+      });
+    });
+    
+    return {
+      class_usage: classUsageResults as RowDataPacket[],
+      class_occupancy: Array.from(classes.values()),
+      berth_preferences: Array.from(berthPreferences.values())
+    };
+  } catch (error) {
+    console.error('Error getting class-wise analytics:', error);
+    return {
+      class_usage: [],
+      class_occupancy: [],
+      berth_preferences: []
+    };
+  }
+}
+
+async function getBookingPatterns(startDate: string, endDate: string) {
+  try {
+    // Get booking patterns by day of week
+    const dayOfWeekQuery = `
+      SELECT 
+        DAYOFWEEK(booking_date) as day_of_week,
+        COUNT(*) as booking_count,
+        SUM(total_fare) as total_revenue
+      FROM TICKET
+      WHERE booking_date BETWEEN ? AND ?
+      AND booking_status != 'Cancelled'
+      GROUP BY DAYOFWEEK(booking_date)
+      ORDER BY DAYOFWEEK(booking_date)
+    `;
+    
+    // Get booking patterns by hour of day
+    const hourOfDayQuery = `
+      SELECT 
+        HOUR(booking_date) as hour_of_day,
+        COUNT(*) as booking_count,
+        SUM(total_fare) as total_revenue
+      FROM TICKET
+      WHERE booking_date BETWEEN ? AND ?
+      AND booking_status != 'Cancelled'
+      GROUP BY HOUR(booking_date)
+      ORDER BY HOUR(booking_date)
+    `;
+    
+    // Get booking patterns by days before journey
+    const advanceBookingQuery = `
+      SELECT 
+        DATEDIFF(s.journey_date, t.booking_date) as days_in_advance,
+        COUNT(*) as booking_count,
+        AVG(t.total_fare) as avg_fare
+      FROM TICKET t
+      JOIN JOURNEY j ON t.journey_id = j.journey_id
+      JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+      WHERE t.booking_date BETWEEN ? AND ?
+      AND t.booking_status != 'Cancelled'
+      GROUP BY days_in_advance
+      HAVING days_in_advance >= 0 AND days_in_advance <= 90
+      ORDER BY days_in_advance
+    `;
+    
+    const [weekdayResults, hourlyResults, advanceResults] = await Promise.all([
+      query(dayOfWeekQuery, [startDate, endDate]),
+      query(hourOfDayQuery, [startDate, endDate]),
+      query(advanceBookingQuery, [startDate, endDate])
+    ]);
+    
+    // Map weekday numbers to names
+    const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const weekdayData = (weekdayResults as RowDataPacket[]).map(day => ({
+      day: weekdayNames[day.day_of_week - 1],
+      booking_count: day.booking_count,
+      total_revenue: day.total_revenue
+    }));
+    
+    // Format hourly data
+    const hourlyData = (hourlyResults as RowDataPacket[]).map(hour => ({
+      hour: hour.hour_of_day,
+      hour_formatted: `${hour.hour_of_day.toString().padStart(2, '0')}:00`,
+      booking_count: hour.booking_count,
+      total_revenue: hour.total_revenue
+    }));
+    
+    // Group advance booking data
+    const advanceData = (advanceResults as RowDataPacket[]).map(advance => ({
+      days_in_advance: advance.days_in_advance,
+      booking_count: advance.booking_count,
+      avg_fare: advance.avg_fare
+    }));
+    
+    return {
+      by_weekday: weekdayData,
+      by_hour: hourlyData,
+      by_advance_days: advanceData
+    };
+  } catch (error) {
+    console.error('Error getting booking patterns:', error);
+    return {
+      by_weekday: [],
+      by_hour: [],
+      by_advance_days: []
+    };
   }
 } 

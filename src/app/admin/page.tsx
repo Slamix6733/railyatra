@@ -131,58 +131,6 @@ export default function AdminPage() {
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load statistics. Please try again later.');
-        
-        // Set mock data for demonstration in case of error
-        setStats({
-          pnr: {
-            total: 1250,
-            confirmed: 980,
-            waitlisted: 180,
-            cancelled: 90
-          },
-          schedule: {
-            total: 750,
-            onTime: 650,
-            delayed: 100
-          },
-          seats: {
-            totalCapacity: 15000,
-            booked: 12350,
-            available: 2650
-          },
-          passengers: {
-            total: 14500,
-            avgPerTrain: 425
-          },
-          waitlisted: {
-            total: 580,
-            cleared: 380,
-            remaining: 200
-          },
-          refunds: {
-            total: 95000.00,
-            pending: 15000.00,
-            processed: 80000.00
-          },
-          revenue: {
-            total: 2450000.00,
-            yesterday: 85000.00,
-            thisMonth: 850000.00
-          },
-          cancellations: {
-            total: 320,
-            refunded: 290,
-            pending: 30
-          },
-          routes: [
-            { route: "New Delhi - Mumbai Central", count: 4500 },
-            { route: "Chennai Central - Bangalore", count: 3800 },
-            { route: "Howrah - New Delhi", count: 4200 }
-          ],
-          bill: {
-            totalGenerated: 14500
-          }
-        });
       } finally {
         setIsLoading(false);
       }
@@ -254,6 +202,16 @@ export default function AdminPage() {
                 }`}
               >
                 System Logs & Stats
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-6 py-4 font-medium text-sm ${
+                  activeTab === 'analytics'
+                    ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                Advanced Analytics
               </button>
               <button
                 onClick={() => setActiveTab('users')}
@@ -484,6 +442,314 @@ export default function AdminPage() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+                
+                {activeTab === 'analytics' && (
+                  <div>
+                    <h2 className="text-xl font-semibold mb-8 text-gray-900 dark:text-white">Advanced Analytics</h2>
+                    
+                    {/* Revenue by Train Type */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-8">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Revenue by Train Type</h3>
+                      
+                      {stats.revenue_by_train_type && stats.revenue_by_train_type.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700">
+                              <tr>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Train Type</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tickets Sold</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total Revenue</th>
+                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Percentage</th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                              {stats.revenue_by_train_type.map((item: any, index: number) => (
+                                <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{item.train_type}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{formatNumber(item.ticket_count)}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">{formatCurrency(item.total_revenue)}</td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                        <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${item.percentage}%` }}></div>
+                                      </div>
+                                      <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{item.percentage}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-gray-500 dark:text-gray-400">No revenue data available by train type.</p>
+                      )}
+                    </div>
+                    
+                    {/* Peak Travel Times */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-8">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Peak Travel Times</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Hourly Distribution */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Hourly Distribution</h4>
+                          {stats.peak_travel_times && stats.peak_travel_times.hourly ? (
+                            <div className="relative">
+                              <div className="h-64 flex items-end space-x-2">
+                                {stats.peak_travel_times.hourly.map((hour: any, index: number) => {
+                                  // Find the max value to calculate percentage height
+                                  const maxValue = Math.max(...stats.peak_travel_times.hourly.map((h: any) => h.passenger_count));
+                                  const percentage = maxValue > 0 ? (hour.passenger_count / maxValue) * 100 : 0;
+                                  
+                                  return (
+                                    <div key={index} className="flex flex-col items-center flex-1">
+                                      <div 
+                                        className="w-full bg-blue-500 hover:bg-blue-600 rounded-t-sm cursor-pointer transition-all"
+                                        style={{ height: `${percentage}%` }}
+                                        title={`${hour.hour_formatted}: ${formatNumber(hour.passenger_count)} passengers`}
+                                      ></div>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">{hour.hour}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Hour of Day</div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No hourly data available.</p>
+                          )}
+                        </div>
+                        
+                        {/* Weekly Distribution */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Day of Week Distribution</h4>
+                          {stats.peak_travel_times && stats.peak_travel_times.weekday ? (
+                            <div className="relative">
+                              <div className="h-64 flex items-end space-x-2">
+                                {stats.peak_travel_times.weekday.map((day: any, index: number) => {
+                                  // Find the max value to calculate percentage height
+                                  const maxValue = Math.max(...stats.peak_travel_times.weekday.map((d: any) => d.passenger_count));
+                                  const percentage = maxValue > 0 ? (day.passenger_count / maxValue) * 100 : 0;
+                                  
+                                  return (
+                                    <div key={index} className="flex flex-col items-center flex-1">
+                                      <div 
+                                        className="w-full bg-green-500 hover:bg-green-600 rounded-t-sm cursor-pointer transition-all"
+                                        style={{ height: `${percentage}%` }}
+                                        title={`${day.day_name}: ${formatNumber(day.passenger_count)} passengers`}
+                                      ></div>
+                                      <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">{day.day_name.substring(0, 3)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">Day of Week</div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No weekday data available.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Passenger Demographics */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-8">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Passenger Demographics</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Age Distribution */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Age Groups</h4>
+                          {stats.passenger_demographics && stats.passenger_demographics.age_distribution ? (
+                            <div className="space-y-3">
+                              {stats.passenger_demographics.age_distribution.map((age: any, index: number) => {
+                                // Calculate percentage for the progress bar
+                                const totalCount = stats.passenger_demographics.age_distribution.reduce((sum: number, item: any) => sum + item.count, 0);
+                                const percentage = totalCount > 0 ? (age.count / totalCount) * 100 : 0;
+                                
+                                return (
+                                  <div key={index}>
+                                    <div className="flex justify-between mb-1">
+                                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{age.age_group}</span>
+                                      <span className="text-sm text-gray-600 dark:text-gray-400">{formatNumber(age.count)}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                      <div className="bg-purple-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No age data available.</p>
+                          )}
+                        </div>
+                        
+                        {/* Gender Distribution */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Gender Distribution</h4>
+                          {stats.passenger_demographics && stats.passenger_demographics.gender_distribution ? (
+                            <div className="space-y-3">
+                              {stats.passenger_demographics.gender_distribution.map((gender: any, index: number) => {
+                                // Calculate percentage for the progress bar
+                                const totalCount = stats.passenger_demographics.gender_distribution.reduce((sum: number, item: any) => sum + item.count, 0);
+                                const percentage = totalCount > 0 ? (gender.count / totalCount) * 100 : 0;
+                                
+                                // Determine color based on gender
+                                const barColor = gender.gender.toLowerCase() === 'male' ? 'bg-blue-600' : 
+                                                gender.gender.toLowerCase() === 'female' ? 'bg-pink-500' : 'bg-gray-500';
+                                
+                                return (
+                                  <div key={index}>
+                                    <div className="flex justify-between mb-1">
+                                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{gender.gender}</span>
+                                      <span className="text-sm text-gray-600 dark:text-gray-400">{formatNumber(gender.count)}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                      <div className={`${barColor} h-2.5 rounded-full`} style={{ width: `${percentage}%` }}></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No gender data available.</p>
+                          )}
+                        </div>
+                        
+                        {/* Concession Categories */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Concession Categories</h4>
+                          {stats.passenger_demographics && stats.passenger_demographics.concession_distribution ? (
+                            <div className="space-y-3">
+                              {stats.passenger_demographics.concession_distribution.map((category: any, index: number) => {
+                                // Calculate percentage for the progress bar
+                                const totalCount = stats.passenger_demographics.concession_distribution.reduce((sum: number, item: any) => sum + item.count, 0);
+                                const percentage = totalCount > 0 ? (category.count / totalCount) * 100 : 0;
+                                
+                                return (
+                                  <div key={index}>
+                                    <div className="flex justify-between mb-1">
+                                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{category.category}</span>
+                                      <span className="text-sm text-gray-600 dark:text-gray-400">{formatNumber(category.count)}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                      <div className="bg-teal-600 h-2.5 rounded-full" style={{ width: `${percentage}%` }}></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No concession data available.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Payment Analytics */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm p-6 mb-8">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Payment Analytics</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Revenue by Payment Method */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Revenue by Payment Method</h4>
+                          {stats.payment_analytics && stats.payment_analytics.by_method ? (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment Method</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Transactions</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Revenue</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Share</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                  {stats.payment_analytics.by_method.map((item: any, index: number) => (
+                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{item.payment_method || item.method}</td>
+                                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {formatNumber(item.transaction_count)}
+                                      </td>
+                                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-white font-medium">
+                                        {formatCurrency(item.total_amount)}
+                                      </td>
+                                      <td className="px-4 py-2 whitespace-nowrap">
+                                        <div className="flex items-center">
+                                          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                            <div 
+                                              className="bg-blue-600 h-2.5 rounded-full" 
+                                              style={{ width: `${item.percentage}%` }}
+                                            ></div>
+                                          </div>
+                                          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{item.percentage}%</span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No payment method data available.</p>
+                          )}
+                        </div>
+                        
+                        {/* Processing Times */}
+                        <div>
+                          <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-200">Average Processing Time</h4>
+                          {stats.payment_analytics && stats.payment_analytics.processing_times ? (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Payment Method</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Avg. Time</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                  {stats.payment_analytics.processing_times.map((item: any, index: number) => (
+                                    <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                      <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{item.payment_mode}</td>
+                                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                        {item.avg_formatted}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No processing time data available.</p>
+                          )}
+                          
+                          {/* Monthly Trends */}
+                          <h4 className="text-md font-medium mt-6 mb-3 text-gray-800 dark:text-gray-200">Recent Monthly Trends</h4>
+                          {stats.payment_analytics && stats.payment_analytics.monthly_trends && stats.payment_analytics.monthly_trends.length > 0 ? (
+                            <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                              <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                                <span className="font-medium">Last Month:</span> {stats.payment_analytics.monthly_trends[stats.payment_analytics.monthly_trends.length-1].month}
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {stats.payment_analytics.monthly_trends[stats.payment_analytics.monthly_trends.length-1].methods.map((method: any, idx: number) => (
+                                  <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
+                                    <div className="font-medium">{method.payment_method || method.method}</div>
+                                    <div className="text-gray-600 dark:text-gray-400">{formatCurrency(method.amount)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 dark:text-gray-400">No monthly trend data available.</p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}

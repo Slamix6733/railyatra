@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FaTrain, FaUser, FaCalendarAlt, FaMapMarkerAlt, FaRupeeSign, FaSadTear } from 'react-icons/fa';
+import { FaTrain, FaUser, FaCalendarAlt, FaMapMarkerAlt, FaRupeeSign, FaSadTear, FaSearch, FaTicketAlt, FaClock } from 'react-icons/fa';
 
 // Define types for the ticket data
 interface Passenger {
@@ -129,269 +129,307 @@ export default function PnrStatusPage() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 min-h-screen py-10">
-      <div className="container mx-auto px-4">                       
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6 text-center">PNR Status</h1>
-          
-          {/* PNR Form */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-8">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 text-white">
+        <div className="container mx-auto px-4 py-16">
+          <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4 animate-fadeIn">PNR Status Checker</h1>
+            <p className="text-xl text-blue-100 mb-6 animate-fadeIn" style={{animationDelay: '200ms'}}>
+              Track your ticket status and journey details with your PNR number
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* PNR Form */}
+      <div className="container mx-auto px-4 -mt-10 z-10 relative">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700 animate-fadeIn" style={{animationDelay: '300ms'}}>
+          <div className="p-6">
             <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <label htmlFor="pnr" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Enter PNR Number
                 </label>
-                <input
-                  type="text"
-                  id="pnr"
-                  value={pnrNumber}
-                  onChange={(e) => setPnrNumber(e.target.value)}
-                  placeholder="10-digit PNR number"
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                  maxLength={10}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <FaTicketAlt className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    id="pnr"
+                    value={pnrNumber}
+                    onChange={(e) => setPnrNumber(e.target.value)}
+                    placeholder="Enter your 10-digit PNR number"
+                    className="w-full pl-10 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    maxLength={10}
+                  />
+                </div>
               </div>
               <div className="self-end">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full md:w-auto px-6 py-2 bg-blue-700 hover:bg-blue-800 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full md:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  {isLoading ? 'Checking...' : 'Check Status'}
+                  {isLoading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Checking...
+                    </>
+                  ) : (
+                    <>
+                      <FaSearch className="mr-2" />
+                      Check Status
+                    </>
+                  )}
                 </button>
               </div>
             </form>
           </div>
-          
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 mb-8 rounded-md flex items-center">
-              <FaSadTear className="mr-3 flex-shrink-0" />
-              <p>{error}</p>
-            </div>
-          )}
-          
-          {/* Ticket Details */}
-          {ticketData && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+        </div>
+        
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-400 p-4 mt-6 rounded-lg shadow-md flex items-center animate-fadeIn">
+            <FaSadTear className="mr-3 flex-shrink-0 text-xl" />
+            <p>{error}</p>
+          </div>
+        )}
+        
+        {/* Ticket Details */}
+        {ticketData && (
+          <div className="my-8 animate-fadeIn" style={{animationDelay: '200ms'}}>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
               {/* Ticket Header */}
-              <div className="bg-blue-700 text-white p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <h2 className="text-xl font-semibold">PNR: {ticketData.pnr_number}</h2>
+              <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white p-6">
+                <div className="flex flex-wrap justify-between items-center mb-4">
+                  <div className="flex items-center mb-2 md:mb-0">
+                    <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-4">
+                      <FaTicketAlt className="text-2xl" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">PNR: {ticketData.pnr_number}</h2>
+                      <p className="text-blue-100 text-sm">Booked on {formatDate(ticketData.booking_date)}</p>
+                    </div>
+                  </div>
                   <span className={`text-sm px-3 py-1 rounded-full text-white ${getStatusColor(ticketData.booking_status)}`}>
                     {ticketData.booking_status}
                   </span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center">
-                    <FaTrain className="mr-2 flex-shrink-0" />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                  <div className="flex items-start">
+                    <FaTrain className="mr-3 mt-1 flex-shrink-0 text-blue-300" />
                     <div>
                       <div className="text-sm text-blue-200">Train Number/Name</div>
-                      <div>{ticketData.train_number} - {ticketData.train_name}</div>
+                      <div className="font-medium">{ticketData.train_number} - {ticketData.train_name}</div>
                     </div>
                   </div>
-                  <div className="flex items-center">
-                    <FaCalendarAlt className="mr-2 flex-shrink-0" />
+                  
+                  <div className="flex items-start">
+                    <FaCalendarAlt className="mr-3 mt-1 flex-shrink-0 text-blue-300" />
                     <div>
                       <div className="text-sm text-blue-200">Journey Date</div>
-                      <div>{formatDate(ticketData.journey_date)}</div>
+                      <div className="font-medium">{formatDate(ticketData.journey_date)}</div>
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              {/* Journey Details */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                  <div className="mb-4 md:mb-0">
-                    <div className="text-sm text-gray-500 dark:text-gray-400">From</div>
-                    <div className="font-semibold text-lg text-gray-900 dark:text-white">{ticketData.source_station}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{ticketData.source_code}</div>
-                    {ticketData.source_departure_time && (
-                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                        <span className="font-medium">Dept:</span> {formatTime(ticketData.source_departure_time)}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                  <div>
+                    <div className="flex items-center justify-between text-sm text-blue-200 mb-1">
+                      <span>From</span>
+                      <span>To</span>
+                    </div>
+                    <div className="flex items-center">
+                      <div>
+                        <div className="font-medium">{ticketData.source_station}</div>
+                        <div className="text-sm text-blue-200">{ticketData.source_code}</div>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div className="hidden md:block flex-1 px-4">
-                    <div className="relative flex items-center justify-center">
-                      <div className="h-0.5 bg-blue-500 w-full"></div>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="bg-white dark:bg-gray-800 px-2">
-                          <FaTrain className="text-blue-700 dark:text-blue-400" />
+                      
+                      <div className="flex-1 mx-4 border-t border-dashed border-blue-300/60 relative">
+                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-blue-500 rounded-full p-1">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14"></path>
+                          </svg>
                         </div>
                       </div>
+                      
+                      <div className="text-right">
+                        <div className="font-medium">{ticketData.destination_station}</div>
+                        <div className="text-sm text-blue-200">{ticketData.destination_code}</div>
+                      </div>
                     </div>
                   </div>
                   
-                  <div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">To</div>
-                    <div className="font-semibold text-lg text-gray-900 dark:text-white">{ticketData.destination_station}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">{ticketData.destination_code}</div>
-                    {ticketData.destination_arrival_time && (
-                      <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                        <span className="font-medium">Arr:</span> {formatTime(ticketData.destination_arrival_time)}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-start">
+                      <FaClock className="mr-2 mt-1 flex-shrink-0 text-blue-300" size={14} />
+                      <div>
+                        <div className="text-sm text-blue-200">Departure</div>
+                        <div className="font-medium">{formatTime(ticketData.source_departure_time)}</div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Fare Details */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Booking Date</div>
-                    <div className="text-gray-900 dark:text-gray-100">{formatDate(ticketData.booking_date)}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Class</div>
-                    <div className="text-gray-900 dark:text-gray-100">{ticketData.class_name || 'N/A'}{ticketData.class_code ? ` (${ticketData.class_code})` : ''}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Total Fare</div>
-                    <div className="flex items-center text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      <FaRupeeSign className="mr-1 h-4 w-4" />
-                      {ticketData.total_fare}
+                    </div>
+                    
+                    <div className="flex items-start">
+                      <FaClock className="mr-2 mt-1 flex-shrink-0 text-blue-300" size={14} />
+                      <div>
+                        <div className="text-sm text-blue-200">Arrival</div>
+                        <div className="font-medium">{formatTime(ticketData.destination_arrival_time)}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-              
-              {/* Train Status */}
-              {ticketData.train_status && (
-                <div className="p-4 border-b border-gray-200">
-                  <div className="flex items-center">
-                    <div className={`w-3 h-3 rounded-full mr-2 ${
-                      ticketData.train_status.toLowerCase() === 'on time' ? 'bg-green-500' : 
-                      ticketData.train_status.toLowerCase() === 'delayed' ? 'bg-yellow-500' :
-                      ticketData.train_status.toLowerCase() === 'cancelled' ? 'bg-red-600' : 'bg-blue-500'
-                    }`}></div>
-                    <h3 className="font-semibold">Train Status: {ticketData.train_status}</h3>
-                  </div>
-                </div>
-              )}
-              
-              {/* Station Schedule */}
-              {ticketData.station_timings && ticketData.station_timings.length > 0 && (
-                <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="font-semibold text-lg mb-3 text-gray-900 dark:text-white">Travel Schedule</h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Station
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Arrival
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Departure
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                        {ticketData.station_timings.map((station, index) => (
-                          <tr key={index} className={
-                            station.station_code === ticketData.source_code ? 'bg-green-100 dark:bg-green-900/30' :
-                            station.station_code === ticketData.destination_code ? 'bg-red-100 dark:bg-red-900/30' : ''
-                          }>
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">{station.station_name}</div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">{station.station_code}</div>
-                            </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {station.station_code === ticketData.source_code ? '-' : 
-                                formatTime(station.actual_arrival_time || station.scheduled_arrival)}
-                            </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {station.station_code === ticketData.destination_code ? '-' : 
-                                formatTime(station.actual_departure_time || station.scheduled_departure)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-              
-              {/* Passengers Details */}
-              <div className="p-4">
-                <h3 className="font-semibold text-lg mb-3 text-gray-900 dark:text-white">Passenger Details</h3>
-                {ticketData.passengers && ticketData.passengers.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-800">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Name
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Age/Gender
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Seat/Berth
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
-                        {ticketData.passengers.map((passenger, index) => (
-                          <tr key={index}>
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <FaUser className="flex-shrink-0 mr-2 text-gray-400 dark:text-gray-500" />
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">{passenger.name}</div>
+
+              {/* Passenger List */}
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                  Passenger Details
+                </h3>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead>
+                      <tr>
+                        <th className="px-6 py-3 bg-gray-50 dark:bg-gray-800 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Passenger</th>
+                        <th className="px-6 py-3 bg-gray-50 dark:bg-gray-800 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Age/Gender</th>
+                        <th className="px-6 py-3 bg-gray-50 dark:bg-gray-800 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 bg-gray-50 dark:bg-gray-800 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Seat/Berth</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {ticketData.passengers.map((passenger, idx) => (
+                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-300 mr-3">
+                                <FaUser size={14} />
                               </div>
-                            </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {passenger.age} / {passenger.gender.charAt(0)}
-                            </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <span className={`px-2 py-1 text-xs rounded-full text-white ${getStatusColor(passenger.status)}`}>
-                                {passenger.status}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {passenger.seat_number ? (
-                                <>
-                                  {passenger.seat_number}
-                                  {passenger.berth_type ? ` (${passenger.berth_type})` : ''}
-                                </>
-                              ) : (
-                                passenger.waitlist_number ? `WL ${passenger.waitlist_number}` : 'N/A'
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <span>{passenger.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {passenger.age} / {passenger.gender.charAt(0).toUpperCase() + passenger.gender.slice(1)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              passenger.status.toLowerCase().includes('confirm') || passenger.status.toLowerCase() === 'cnf'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                                : passenger.status.toLowerCase().includes('rac')
+                                ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+                                : passenger.status.toLowerCase().includes('wl') || passenger.status.toLowerCase().includes('wait')
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                            }`}>
+                              {passenger.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {passenger.seat_number ? (
+                              <div>
+                                <span className="font-medium text-gray-900 dark:text-white">{passenger.seat_number}</span>
+                                {passenger.berth_type && (
+                                  <span className="text-xs ml-2">({passenger.berth_type.replace('_', ' ')})</span>
+                                )}
+                              </div>
+                            ) : (
+                              passenger.waitlist_number ? `WL ${passenger.waitlist_number}` : 'Not Assigned'
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Fare Details */}
+                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Fare Details</h3>
+                    <div className="flex items-center">
+                      <FaRupeeSign className="text-gray-500 dark:text-gray-400 mr-1" />
+                      <span className="text-xl font-bold text-gray-900 dark:text-white">{ticketData.total_fare}</span>
+                    </div>
                   </div>
-                ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-center py-4">No passenger information available</p>
+                  
+                  {ticketData.class_name && (
+                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      Class: <span className="font-medium text-gray-700 dark:text-gray-300">{ticketData.class_name} ({ticketData.class_code})</span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Train Route and Timings */}
+                {ticketData.station_timings && ticketData.station_timings.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Journey Route</h3>
+                    
+                    <div className="space-y-4">
+                      {ticketData.station_timings.map((station, idx) => (
+                        <div key={idx} className="flex relative">
+                          {/* Timeline connector */}
+                          {idx < ticketData.station_timings!.length - 1 && (
+                            <div className="absolute top-6 left-3 bottom-0 w-0.5 bg-blue-200 dark:bg-blue-900"></div>
+                          )}
+                          
+                          {/* Station dot */}
+                          <div 
+                            className={`z-10 flex-shrink-0 w-6 h-6 rounded-full mt-1 mr-4 flex items-center justify-center ${
+                              station.station_code === ticketData.source_code 
+                                ? 'bg-green-500' 
+                                : station.station_code === ticketData.destination_code
+                                ? 'bg-red-500'
+                                : 'bg-blue-500'
+                            }`}
+                          >
+                            <span className="text-white text-xs font-bold">{idx + 1}</span>
+                          </div>
+                          
+                          {/* Station details */}
+                          <div className="flex-1 pb-8">
+                            <div className="flex flex-wrap justify-between items-center">
+                              <div>
+                                <h4 className="text-base font-medium text-gray-900 dark:text-white">
+                                  {station.station_name}
+                                </h4>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  {station.station_code}
+                                  {station.distance_from_source !== undefined && (
+                                    <span className="ml-2">{station.distance_from_source} km</span>
+                                  )}
+                                </p>
+                              </div>
+                              
+                              <div className="text-right">
+                                {station.scheduled_arrival && (
+                                  <div className="text-sm">
+                                    <span className="text-gray-500 dark:text-gray-400">Arr: </span>
+                                    <span className="text-gray-900 dark:text-white font-medium">{formatTime(station.scheduled_arrival)}</span>
+                                  </div>
+                                )}
+                                {station.scheduled_departure && (
+                                  <div className="text-sm">
+                                    <span className="text-gray-500 dark:text-gray-400">Dep: </span>
+                                    <span className="text-gray-900 dark:text-white font-medium">{formatTime(station.scheduled_departure)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
-          )}
-          
-          {/* Information Section */}
-          {!ticketData && !isLoading && !error && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mt-8">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-2">How to Check PNR Status</h3>
-              <ul className="list-disc pl-5 space-y-1 text-blue-800 dark:text-blue-400">
-                <li>Enter your 10-digit PNR number in the field above</li>
-                <li>PNR can be found on your ticket or booking confirmation</li>
-                <li>Click on "Check Status" to view your ticket details</li>
-                <li>View passenger status, train details, and journey information</li>
-              </ul>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
