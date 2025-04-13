@@ -142,6 +142,12 @@ export default function Header() {
             <NavLink href="/contact" active={pathname.startsWith('/contact')}>
               Contact
             </NavLink>
+            {/* Admin Dashboard link - only shown to logged in users */}
+            {isLoggedIn && (
+              <NavLink href="/admin" active={pathname === '/admin'}>
+                Admin Dashboard
+              </NavLink>
+            )}
           </nav>
           
           {/* Desktop Right Section */}
@@ -266,6 +272,12 @@ export default function Header() {
             <MobileNavLink href="/contact" active={pathname.startsWith('/contact')}>
               Contact
             </MobileNavLink>
+            {/* Admin Dashboard link - only shown to logged in users */}
+            {isLoggedIn && (
+              <MobileNavLink href="/admin" active={pathname === '/admin'}>
+                Admin Dashboard
+              </MobileNavLink>
+            )}
             
             {isLoggedIn ? (
               <>
