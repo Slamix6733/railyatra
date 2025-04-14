@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { FaTrain, FaTicketAlt, FaUser, FaWallet, FaCalendarAlt, FaMapMarkerAlt, FaClock, FaDownload, FaShareAlt, FaCheck } from 'react-icons/fa';
+import { downloadTicketAsPDF } from '@/lib/pdfUtils';
 
 interface TicketData {
   pnr: string;
@@ -40,6 +41,7 @@ export default function BookingConfirmationPage() {
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const confettiRef = useRef<HTMLDivElement>(null);
+  const ticketRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
     // Get ticket data from session storage first
@@ -228,8 +230,9 @@ export default function BookingConfirmationPage() {
   };
   
   const handleDownloadTicket = () => {
-    alert('Ticket download functionality will be implemented here');
-    // In a real app, this would generate a PDF ticket and download it
+    if (ticket) {
+      downloadTicketAsPDF(ticketRef.current, ticket.pnr);
+    }
   };
   
   const handleShareTicket = () => {
@@ -313,7 +316,7 @@ export default function BookingConfirmationPage() {
       </div>
       
       {/* Ticket Card */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-6 animate-fadeIn" style={{ animationDelay: '0.2s' }}>
+      <div ref={ticketRef} className="bg-white rounded-xl shadow-lg overflow-hidden mb-6 animate-fadeIn" style={{ animationDelay: '0.2s' }}>
         {/* Ticket Header */}
         <div className="bg-gradient-to-r from-blue-700 to-blue-500 p-6 text-white">
           <div className="flex flex-wrap items-center justify-between">

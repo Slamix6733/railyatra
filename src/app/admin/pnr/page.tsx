@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import { FaTicketAlt, FaArrowLeft, FaSearch } from 'react-icons/fa';
+import { downloadTicketAsPDF } from '@/lib/pdfUtils';
 
 export default function PnrTrackingPage() {
   const [pnrNumber, setPnrNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [ticketData, setTicketData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,7 +183,7 @@ export default function PnrTrackingPage() {
         </div>
 
         {ticketData && (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div ref={ticketRef} className="bg-white rounded-lg shadow-md overflow-hidden mt-8">
             <div className="bg-blue-600 p-4 text-white flex items-center">
               <FaTicketAlt className="text-xl mr-3" />
               <h2 className="text-xl font-semibold">Ticket Information</h2>
@@ -277,7 +279,7 @@ export default function PnrTrackingPage() {
               
               <div className="mt-6 flex justify-end">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => downloadTicketAsPDF(ticketRef.current, ticketData.pnr_number)}
                   className="bg-blue-100 text-blue-700 px-4 py-2 rounded-md font-medium mr-3 hover:bg-blue-200"
                 >
                   Print Ticket

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { FaTrain, FaUser, FaCalendarAlt, FaMapMarkerAlt, FaRupeeSign, FaSadTear, FaSearch, FaTicketAlt, FaClock, FaDownload, FaShareAlt } from 'react-icons/fa';
 import { getPnrStatus } from '@/lib/api-client';
+import { downloadTicketAsPDF } from '@/lib/pdfUtils';
 
 // Define types for the ticket data
 interface Passenger {
@@ -51,6 +52,7 @@ export default function PnrStatusPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [ticketData, setTicketData] = useState<TicketData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const ticketRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +235,7 @@ export default function PnrStatusPage() {
         
         {/* Ticket Details */}
         {ticketData && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div ref={ticketRef} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 text-white">
               <div className="flex justify-between items-center">
@@ -414,36 +416,36 @@ export default function PnrStatusPage() {
                   </div>
                 </div>
               )}
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="mt-8 flex flex-wrap gap-4 p-6">
+              <button 
+                onClick={() => downloadTicketAsPDF(ticketRef.current, ticketData.pnr_number)}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <FaDownload className="mr-2 -ml-1" />
+                Download E-Ticket
+              </button>
               
-              {/* Action Buttons */}
-              <div className="mt-8 flex flex-wrap gap-4">
-                <button 
-                  onClick={() => window.print()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <FaDownload className="mr-2 -ml-1" />
-                  Download E-Ticket
-                </button>
-                
-                <button 
-                  onClick={() => {
-                    try {
-                      navigator.share({
-                        title: `PNR Status for ${ticketData.pnr_number}`,
-                        text: `My ticket details for ${ticketData.train_name} (${ticketData.train_number}) on ${formatDate(ticketData.journey_date)}`,
-                        url: window.location.href
-                      });
-                    } catch (err) {
-                      console.error('Web Share API not supported', err);
-                      alert('Sharing not supported on this browser');
-                    }
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <FaShareAlt className="mr-2 -ml-1" />
-                  Share
-                </button>
-              </div>
+              <button 
+                onClick={() => {
+                  try {
+                    navigator.share({
+                      title: `PNR Status for ${ticketData.pnr_number}`,
+                      text: `My ticket details for ${ticketData.train_name} (${ticketData.train_number}) on ${formatDate(ticketData.journey_date)}`,
+                      url: window.location.href
+                    });
+                  } catch (err) {
+                    console.error('Web Share API not supported', err);
+                    alert('Sharing not supported on this browser');
+                  }
+                }}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <FaShareAlt className="mr-2 -ml-1" />
+                Share
+              </button>
             </div>
           </div>
         )}

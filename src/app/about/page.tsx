@@ -13,7 +13,7 @@ export default function AboutPage() {
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Hero Section */}
       <motion.div 
-        className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 text-white"
+        className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 text-white mb-16"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
@@ -42,7 +42,7 @@ export default function AboutPage() {
 
       {/* Team Section */}
       <motion.div 
-        className="container mx-auto px-4 py-12 bg-gray-100 dark:bg-gray-800 rounded-3xl my-12"
+        className="container mx-auto px-4 py-16 bg-gray-100 dark:bg-gray-800 rounded-3xl my-20"
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.2 }}
@@ -64,7 +64,7 @@ export default function AboutPage() {
           </p>
         </motion.div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* Team Member 1 */}
           <motion.div 
             className="bg-white dark:bg-gray-700 p-6 rounded-xl shadow-md border border-gray-100 dark:border-gray-600 text-center"
@@ -153,14 +153,14 @@ export default function AboutPage() {
 
       {/* Main Content Section */}
       <motion.div 
-        className="container mx-auto px-4 py-12"
+        className="container mx-auto px-4 py-16 mb-16"
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.4 }}
       >
         <div className="max-w-4xl mx-auto">
           <motion.div 
-            className="flex items-center mb-6"
+            className="flex items-center mb-8"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
@@ -178,7 +178,7 @@ export default function AboutPage() {
             transition={{ duration: 0.7, delay: 0.7 }}
           >
             <motion.p 
-              className="text-gray-600 dark:text-gray-400 text-base leading-relaxed mb-4"
+              className="text-gray-600 dark:text-gray-400 text-base leading-relaxed mb-6"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.8 }}
@@ -186,7 +186,7 @@ export default function AboutPage() {
               The goal of this mini project is to provide a realistic experience in conceptual design, logical design, implementation, operation, and maintenance of a small relational database for an Indian Railway Ticket Reservation System.
             </motion.p>
             <motion.p 
-              className="text-gray-600 dark:text-gray-400 text-base leading-relaxed mb-4"
+              className="text-gray-600 dark:text-gray-400 text-base leading-relaxed mb-6"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.9 }}
@@ -194,13 +194,13 @@ export default function AboutPage() {
               The application is a railway ticket reservation system that allows passengers to book, modify, and cancel tickets. The system also tracks train schedules, seat availability, and payments.
             </motion.p>
             <motion.div 
-              className="mt-6"
+              className="mt-8"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 1 }}
             >
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-3">Key Features:</h3>
-              <ul className="list-disc pl-6 space-y-1.5 text-gray-600 dark:text-gray-400">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Key Features:</h3>
+              <ul className="list-disc pl-6 space-y-2.5 text-gray-600 dark:text-gray-400">
                 <motion.li initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 1.1 }}>
                   Passengers can book tickets for available trains.
                 </motion.li>
@@ -233,20 +233,20 @@ export default function AboutPage() {
 
       {/* CTA Section */}
       <motion.div 
-        className="container mx-auto px-4 py-10 mb-12"
+        className="container mx-auto px-4 py-16 mb-20"
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.6 }}
       >
         <motion.div 
-          className="bg-gradient-to-r from-blue-700 to-blue-900 rounded-2xl p-8 shadow-lg"
+          className="bg-gradient-to-r from-blue-700 to-blue-900 rounded-2xl p-10 shadow-lg"
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.8 }}
           whileHover={{ scale: 1.02, transition: { duration: 0.3 } }}
         >
           <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="mb-6 md:mb-0 md:mr-12">
+            <div className="mb-8 md:mb-0 md:mr-12">
               <motion.h2 
                 className="text-2xl font-bold text-white mb-4"
                 initial={{ opacity: 0, y: 10 }}
@@ -256,7 +256,7 @@ export default function AboutPage() {
                 Ready to Experience RailYatra?
               </motion.h2>
               <motion.p 
-                className="text-blue-100 mb-6 max-w-xl text-base leading-relaxed"
+                className="text-blue-100 mb-8 max-w-xl text-base leading-relaxed"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 1.1 }}

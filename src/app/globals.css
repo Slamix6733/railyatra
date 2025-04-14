@@ -288,3 +288,65 @@ h1, h2, h3, h4, h5, h6 {
 .stagger-animation > *:nth-child(4) { animation-delay: 0.4s; }
 .stagger-animation > *:nth-child(5) { animation-delay: 0.5s; }
 .stagger-animation > *:nth-child(6) { animation-delay: 0.6s; }
+
+/* Add styles for PDF printing at the end of the file */
+
+/* PDF printing styles */
+.printing-pdf {
+  /* Make sure all elements are visible when printed */
+  display: block !important;
+  overflow: visible !important;
+  background-color: white !important;
+  color: black !important;
+  
+  /* Ensure proper dimensions */
+  width: 100% !important;
+  max-width: 100% !important;
+  
+  /* Better text contrast for printing */
+  text-shadow: none !important;
+}
+
+.printing-pdf * {
+  color-adjust: exact !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  
+  /* Ensure proper background rendering */
+  background-color: transparent !important;
+}
+
+.printing-pdf .bg-gradient-to-r {
+  background: #3b82f6 !important;
+  color: white !important;
+}
+
+/* Make sure text is visible on colored backgrounds */
+.printing-pdf .text-white,
+.printing-pdf .text-blue-100,
+.printing-pdf .text-blue-200,
+.printing-pdf .text-blue-300 {
+  color: white !important;
+}
+
+/* Force show all elements that might be hidden */
+.printing-pdf [hidden],
+.printing-pdf .hidden {
+  display: block !important;
+}
+
+@media print {
+  body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Hide unnecessary elements during print */
+  button, 
+  nav,
+  footer,
+  header:not(.ticket-header) {
+    display: none !important;
+  }
+}
