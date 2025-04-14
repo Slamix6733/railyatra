@@ -15,21 +15,104 @@ export default function ContactPage() {
   });
   const [submitted, setSubmitted] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear any previous error when the user starts typing
+    if (error) setError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null); // Reset error state
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Send emails using the mail API endpoint with absolute URL
+      const baseUrl = window.location.origin;
+      
+      // First send a confirmation to the user
+      const confirmationResponse = await fetch(`${baseUrl}/api/mail`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: formData.email,
+          subject: `Thank you for contacting RailYatra - ${formData.subject}`,
+          content: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+              <div style="background: linear-gradient(to right, #2563eb, #3b82f6); color: white; padding: 15px; border-radius: 5px 5px 0 0;">
+                <h2 style="margin: 0;">Thank You for Contacting Us</h2>
+              </div>
+              
+              <div style="padding: 20px;">
+                <p>Dear ${formData.name},</p>
+                <p>Thank you for reaching out to RailYatra Support. We've received your message regarding "${formData.subject}" and will get back to you shortly.</p>
+                
+                <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 15px; margin: 15px 0;">
+                  <h3 style="margin-top: 0;">Your Message Details</h3>
+                  <p><strong>Subject:</strong> ${formData.subject}</p>
+                  <p><strong>Message:</strong> ${formData.message.substring(0, 100)}${formData.message.length > 100 ? '...' : ''}</p>
+                </div>
+                
+                <p>Our team will review your message and respond as soon as possible. If you have any additional information to provide, please reply to this email.</p>
+                <p>Thank you for choosing RailYatra.</p>
+              </div>
+              
+              <div style="background-color: #f1f5f9; padding: 15px; text-align: center; font-size: 12px; color: #64748b; border-radius: 0 0 5px 5px;">
+                <p>This is an automated email. Please do not reply to this message.</p>
+                <p>&copy; ${new Date().getFullYear()} RailYatra. All rights reserved.</p>
+              </div>
+            </div>
+          `
+        }),
+      });
+
+      const confirmData = await confirmationResponse.json();
+      
+      if (!confirmationResponse.ok) {
+        throw new Error(confirmData.error || 'Failed to send confirmation email');
+      }
+      
+      console.log('Confirmation email sent:', confirmData);
+      
+      // Then send the notification to support
+      const notificationResponse = await fetch(`${baseUrl}/api/mail`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: 'support@railyatra.com',
+          replyTo: formData.email,
+          subject: `Contact Form: ${formData.subject}`,
+          content: `
+            <h2>Contact Form Submission</h2>
+            <p><strong>Name:</strong> ${formData.name}</p>
+            <p><strong>Email:</strong> ${formData.email}</p>
+            <p><strong>Phone:</strong> ${formData.phone || 'Not provided'}</p>
+            <p><strong>Subject:</strong> ${formData.subject}</p>
+            <p><strong>Message:</strong></p>
+            <p>${formData.message.replace(/\n/g, '<br/>')}</p>
+          `
+        }),
+      });
+      
+      const notifData = await notificationResponse.json();
+      console.log('Support notification sent:', notifData);
+      
+      // Even if the support notification fails, we've already sent the user confirmation
+      // So we can consider the form submission successful
       setSubmitted(true);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send your message. Please try again later.');
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -212,6 +295,16 @@ export default function ContactPage() {
                     placeholder="Please describe your query in detail..."
                   ></textarea>
                 </div>
+                
+                {error && (
+                  <div className="col-span-2 mb-4">
+                    <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4 text-center">
+                      <p className="text-red-600 dark:text-red-400">
+                        {error}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="col-span-2">
                   <button

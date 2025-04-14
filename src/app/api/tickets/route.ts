@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { v4 as uuidv4 } from 'uuid';
+// Import nodemailer to use directly
+import nodemailer from 'nodemailer';
 
 // GET: Fetch all tickets or a specific ticket
 export async function GET(request: NextRequest) {
@@ -299,6 +302,43 @@ function generateSeatNumber(classCode: string, berth_preference: string) {
   };
 }
 
+// Send email function to use directly instead of fetch
+async function sendEmail(to: string, subject: string, content: string) {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      console.warn('EMAIL_USER or EMAIL_PASSWORD environment variables are not set.');
+      return { success: false, error: 'Email configuration missing' };
+    }
+
+    // Create a transporter using SMTP
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // use SSL
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    // Send mail
+    const mailOptions = {
+      from: `"RailYatra Support" <${process.env.EMAIL_USER}>`,
+      to: to,
+      subject: subject,
+      html: content,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info);
+    
+    return { success: true, message: `Email sent successfully to ${to}` };
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
 // POST: Create a new ticket
 export async function POST(request: NextRequest) {
   try {
@@ -447,15 +487,11 @@ export async function POST(request: NextRequest) {
           `;
           
           // Send email
-          await fetch('/api/mail', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: (passenger as any).email,
-              subject: `RailYatra Ticket Confirmation - PNR: ${pnr}`,
-              content: emailContent
-            })
-          });
+          await sendEmail(
+            (passenger as any).email,
+            `RailYatra Ticket Confirmation - PNR: ${pnr}`,
+            emailContent
+          );
           
           console.log(`Sent confirmation email to ${(passenger as any).email}`);
         } else {

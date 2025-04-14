@@ -20,6 +20,26 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Email Configuration
+
+This application uses Nodemailer to send emails. To enable email functionality:
+
+1. Create a `.env.local` file at the root of the project if it doesn't exist
+2. Add the following environment variables:
+   ```
+   EMAIL_USER=your-email@gmail.com
+   EMAIL_PASSWORD=your-app-password
+   ```
+
+If you're using Gmail, you'll need to generate an app password:
+
+1. Go to your Google Account settings
+2. Navigate to Security > 2-Step Verification
+3. Scroll down to "App passwords"
+4. Generate a new app password for "Mail" and use it as EMAIL_PASSWORD
+
+If no email credentials are provided, the application will fall back to a mock email implementation for development purposes.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
