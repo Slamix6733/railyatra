@@ -115,11 +115,14 @@ export default function AboutPage() {
             transition={{ duration: 0.5, delay: 0.7 }}
             whileHover={{ y: -5, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' }}
           >
-            <div className="w-28 h-28 rounded-full bg-gray-200 dark:bg-gray-600 mx-auto mb-4 overflow-hidden">
-              {/* Replace with actual image when available */}
-              <div className="w-full h-full flex items-center justify-center">
-                <span className="text-3xl font-bold text-blue-700 dark:text-blue-400">RS</span>
-              </div>
+            <div className="w-28 h-28 rounded-full mx-auto mb-4 overflow-hidden">
+              <Image 
+                src="/images/team/Rakshit.jpg" 
+                alt="Rakshit Singhal" 
+                width={112} 
+                height={112}
+                className="w-full h-full object-cover"
+              />
             </div>
             <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-1">Rakshit Singhal</h3>
             <p className="text-blue-600 dark:text-blue-400 font-medium mb-2">Team Member</p>
