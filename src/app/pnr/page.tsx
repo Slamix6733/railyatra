@@ -191,7 +191,7 @@ export default function PnrStatusPage() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8">
           <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4">
             <div className="flex-grow">
-              <label htmlFor="pnr" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enter 10-digit PNR Number</label>
+              <label htmlFor="pnr" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enter PNR Number</label>
               <input
                 type="text"
                 id="pnr"
@@ -199,8 +199,7 @@ export default function PnrStatusPage() {
                 onChange={(e) => setPnrNumber(e.target.value)}
                 placeholder="e.g. 1234567890"
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                maxLength={10}
-                pattern="[0-9]{10}"
+                maxLength={15}
               />
             </div>
             <button
@@ -324,7 +323,7 @@ export default function PnrStatusPage() {
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">{index + 1}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">{passenger.name}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {passenger.age} / {passenger.gender.charAt(0)}
+                          {passenger.age} / {passenger.gender ? passenger.gender.charAt(0) : ''}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(passenger.status)} text-white`}>
