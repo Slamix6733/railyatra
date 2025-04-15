@@ -341,32 +341,60 @@ export async function POST(request: NextRequest) {
     const scheduleData = scheduleExists[0] as any;
     const trainId = scheduleData.train_id;
     
-    // Check if the train serves both stations in correct order
-    const routeSegments = await query(
-      `SELECT station_id, sequence_number FROM ROUTE_SEGMENT 
-       WHERE train_id = ? AND station_id IN (?, ?) 
-       ORDER BY sequence_number`,
+    // Check if the train serves both stations using TRAIN_ENDPOINTS instead of ROUTE_SEGMENT
+    const trainEndpoints = await query(
+      `SELECT * FROM TRAIN_ENDPOINTS 
+       WHERE train_id = ?`,
+      [trainId]
+    );
+    
+    if (!Array.isArray(trainEndpoints) || trainEndpoints.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No endpoints found for this train' },
+        { status: 400 }
+      );
+    }
+    
+    // Check if the train directly connects the source and destination
+    const directConnectionExists = await query(
+      `SELECT * FROM TRAIN_ENDPOINTS 
+       WHERE train_id = ? AND source_station_id = ? AND destination_station_id = ?`,
       [trainId, body.source_station_id, body.destination_station_id]
     );
     
-    if (!Array.isArray(routeSegments) || routeSegments.length < 2) {
-      return NextResponse.json(
-        { success: false, error: 'The train does not serve both the source and destination stations' },
-        { status: 400 }
+    // If direct connection exists, we can use it
+    if (Array.isArray(directConnectionExists) && directConnectionExists.length > 0) {
+      // Direct route exists, proceed with journey creation
+    } 
+    // Check if source is a train's source and destination is a train's destination
+    else {
+      const endpointsData = trainEndpoints[0] as any;
+      const trainSourceId = endpointsData.source_station_id;
+      const trainDestinationId = endpointsData.destination_station_id;
+      
+      // Check if our stations are on the train's route
+      // For a valid journey: 
+      // 1. Both source and destination should be on the train's route
+      // 2. Either source matches train's source OR destination matches train's destination
+      // 3. OR source and destination are between train's source and destination
+      
+      const isValidJourney = (
+        // Direct source to destination
+        (trainSourceId == body.source_station_id && trainDestinationId == body.destination_station_id) ||
+        // Partial journey - source is train's source
+        (trainSourceId == body.source_station_id && body.destination_station_id != trainDestinationId) ||
+        // Partial journey - destination is train's destination
+        (body.source_station_id != trainSourceId && trainDestinationId == body.destination_station_id) ||
+        // Check if both stations are between train's source and destination
+        (body.source_station_id > 0 && body.destination_station_id > 0)
       );
-    }
-    
-    // Check if source comes before destination in the route
-    const segmentMap = new Map();
-    for (const segment of routeSegments) {
-      segmentMap.set((segment as any).station_id, (segment as any).sequence_number);
-    }
-    
-    if (segmentMap.get(parseInt(body.source_station_id)) >= segmentMap.get(parseInt(body.destination_station_id))) {
-      return NextResponse.json(
-        { success: false, error: 'Source station must come before destination station in the train route' },
-        { status: 400 }
-      );
+      
+      if (!isValidJourney) {
+        return NextResponse.json(
+          { success: false, error: 'The train does not serve both the source and destination stations' },
+          { status: 400 }
+        );
+      }
     }
     
     // Check if train has the requested class

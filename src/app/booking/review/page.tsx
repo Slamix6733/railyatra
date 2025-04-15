@@ -233,16 +233,35 @@ export default function BookingReview() {
         config => config.class_id === bookingData?.class_id
       ) || trainDetails?.seat_configurations[0];
       
-      // Initialize with a default fallback journey_id
-      let journey_id = 1;
+      // Initialize journey_id as null to ensure we properly handle the creation case
+      let journey_id = null;
       
       // First try to find an existing journey
       try {
-        // Get source and destination stations from the train details or use defaults
-        // We need to lookup the station IDs for the source and destination station names
-        // For now, we'll use defaults and add a lookup in the future
-        const sourceStationId = 1;  // Default source station ID
-        const destStationId = 2;    // Default destination station ID
+        // First, we need to get the station IDs for the source and destination stations
+        const sourceStationResponse = await fetch(
+          `/api/stations?name=${encodeURIComponent(trainDetails?.source_station_name || '')}`
+        );
+        const sourceStationData = await sourceStationResponse.json();
+        
+        const destStationResponse = await fetch(
+          `/api/stations?name=${encodeURIComponent(trainDetails?.destination_station_name || '')}`
+        );
+        const destStationData = await destStationResponse.json();
+        
+        const sourceStationId = sourceStationData.success && sourceStationData.data.length > 0 
+          ? sourceStationData.data[0].station_id 
+          : null;
+          
+        const destStationId = destStationData.success && destStationData.data.length > 0 
+          ? destStationData.data[0].station_id 
+          : null;
+        
+        if (!sourceStationId || !destStationId) {
+          throw new Error(`Could not find station IDs for ${trainDetails?.source_station_name} or ${trainDetails?.destination_station_name}`);
+        }
+        
+        console.log(`Found station IDs: source=${sourceStationId}, destination=${destStationId}`);
         
         console.log(`Searching for journey with train_id=${trainDetails?.train_id}, source=${sourceStationId}, destination=${destStationId}, class_id=${selectedClass?.class_id}, date=${bookingData?.journey_date}`);
         
@@ -258,11 +277,44 @@ export default function BookingReview() {
           journey_id = journeyData.data[0].journey_id;
           console.log('Found existing journey with ID:', journey_id);
         } else {
-          // Create a new journey if one doesn't exist
+          // Create a new journey since one doesn't exist
           console.log('Existing journey not found, creating a new one');
           
-          // Get schedule_id from the train data or use a default
-          const schedule_id = 1; // Using default schedule_id since we don't have it in train details
+          // First, get the schedule ID for this train and date
+          const scheduleResponse = await fetch(
+            `/api/schedules?train_id=${trainDetails?.train_id}&date=${bookingData?.journey_date}`
+          );
+          
+          const scheduleData = await scheduleResponse.json();
+          console.log('Schedule search result:', scheduleData);
+          
+          let schedule_id;
+          
+          if (scheduleData.success && scheduleData.data && scheduleData.data.length > 0) {
+            schedule_id = scheduleData.data[0].schedule_id;
+            console.log('Found existing schedule with ID:', schedule_id);
+          } else {
+            // Create a new schedule
+            console.log('Creating a new schedule for train and date');
+            const createScheduleResponse = await fetch('/api/schedules', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                train_id: trainDetails?.train_id,
+                journey_date: bookingData?.journey_date,
+                status: 'On Time'
+              })
+            });
+            
+            const newScheduleData = await createScheduleResponse.json();
+            console.log('Schedule creation result:', newScheduleData);
+            
+            if (newScheduleData.success && newScheduleData.data && newScheduleData.data.schedule_id) {
+              schedule_id = newScheduleData.data.schedule_id;
+            } else {
+              throw new Error('Failed to create schedule');
+            }
+          }
           
           const createJourneyRequest = {
             schedule_id: schedule_id,
@@ -286,12 +338,20 @@ export default function BookingReview() {
             journey_id = newJourneyData.data.journey_id;
             console.log('Created new journey with ID:', journey_id);
           } else {
-            console.warn('Failed to create journey, using fallback journey_id:', journey_id);
+            throw new Error('Failed to create journey');
           }
         }
       } catch (journeyError) {
         console.error('Error finding/creating journey:', journeyError);
-        console.warn('Using fallback journey_id:', journey_id);
+        alert('Failed to create journey for this booking. Please try again.');
+        setSubmitting(false);
+        return;
+      }
+      
+      if (!journey_id) {
+        alert('Could not determine journey for this booking. Please try again.');
+        setSubmitting(false);
+        return;
       }
       
       // Calculate the total fare

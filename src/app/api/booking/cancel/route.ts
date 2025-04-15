@@ -1,10 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import mysql from 'mysql2';
+import { z } from 'zod';
+
+// Create a simple direct connection function that doesn't use the connection pool or promises
+function executeQuery(sql: string, params: any[] = []): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    // Create a fresh connection each time
+    const connection = mysql.createConnection({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT),
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME
+    });
+
+    connection.connect((err) => {
+      if (err) {
+        connection.end();
+        return reject(err);
+      }
+
+      connection.query(sql, params, (error, results) => {
+        // Always close the connection
+        connection.end();
+        
+        if (error) {
+          return reject(error);
+        }
+        
+        resolve(results as any[]);
+      });
+    });
+  });
+}
+
+// Define types for database results
+interface TicketDetail {
+  ticket_id: number;
+  booking_status: string;
+  total_fare: number;
+  journey_date: string;
+  [key: string]: any; // Allow additional properties
+}
+
+interface PassengerTicket {
+  name: string;
+  email?: string;
+  status: string;
+  [key: string]: any; // Allow additional properties
+}
+
+// Helper function to verify table structure
+async function verifyTableStructure(conn: mysql.Connection, queryFn: (sql: string, values?: any[]) => Promise<any>): Promise<boolean> {
+  console.log('Verifying database table structure...');
+  
+  try {
+    // Check TICKET table structure
+    const ticketColumns = await queryFn("SHOW COLUMNS FROM TICKET");
+    console.log('TICKET table columns:', JSON.stringify(ticketColumns, null, 2));
+    
+    // Check PASSENGER_TICKET table structure
+    const passengerTicketColumns = await queryFn("SHOW COLUMNS FROM PASSENGER_TICKET");
+    console.log('PASSENGER_TICKET table columns:', JSON.stringify(passengerTicketColumns, null, 2));
+    
+    // Check CANCELLATION table structure
+    const cancellationColumns = await queryFn("SHOW COLUMNS FROM CANCELLATION");
+    console.log('CANCELLATION table columns:', JSON.stringify(cancellationColumns, null, 2));
+    
+    return true;
+  } catch (error) {
+    console.error('Error verifying table structure:', error);
+    return false;
+  }
+}
 
 // POST: Cancel a booking
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('Received cancellation request for PNR:', body.pnr);
     
     // Validate required fields
     if (!body.pnr) {
@@ -13,36 +87,28 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Get ticket details
-    const ticketDetails = await query(
-      `SELECT t.*, j.*, s.journey_date
-       FROM TICKET t
-       JOIN JOURNEY j ON t.journey_id = j.journey_id
-       JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
-       WHERE t.pnr_number = ?`,
+
+    // 1. Get ticket and check if it exists and can be cancelled
+    const ticketResults = await executeQuery(
+      "SELECT t.ticket_id, t.booking_status, t.total_fare, " +
+      "s.journey_date FROM TICKET t " +
+      "JOIN JOURNEY j ON t.journey_id = j.journey_id " +
+      "JOIN SCHEDULE s ON j.schedule_id = s.schedule_id " +
+      "WHERE t.pnr_number = ?",
       [body.pnr]
     );
-    
-    if (!Array.isArray(ticketDetails) || ticketDetails.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Booking not found' },
-        { status: 404 }
-      );
+
+    if (!ticketResults || ticketResults.length === 0) {
+      return NextResponse.json({ success: false, error: 'Booking not found' }, { status: 404 });
     }
+
+    const ticket = ticketResults[0] as any;
     
-    const ticket = ticketDetails[0] as any;
-    const ticketId = ticket.ticket_id;
-    
-    // Check if the booking is already cancelled
-    if (ticket.booking_status === 'CANCELLED') {
-      return NextResponse.json(
-        { success: false, error: 'Booking is already cancelled' },
-        { status: 400 }
-      );
+    // 2. Check cancellation eligibility
+    if (ticket.booking_status === 'Cancelled') {
+      return NextResponse.json({ success: false, error: 'Booking is already cancelled' }, { status: 400 });
     }
-    
-    // Check if the journey date has passed
+
     const journeyDate = new Date(ticket.journey_date);
     const currentDate = new Date();
     
@@ -52,131 +118,74 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
-    // Get passenger tickets
-    const passengerTickets = await query(
-      `SELECT pt.*, p.name
-       FROM PASSENGER_TICKET pt
-       JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
-       WHERE pt.ticket_id = ?`,
-      [ticketId]
+
+    // 3. Get passenger information
+    const passengerResults = await executeQuery(
+      "SELECT pt.passenger_ticket_id, p.name, p.email " +
+      "FROM PASSENGER_TICKET pt " +
+      "JOIN PASSENGER p ON pt.passenger_id = p.passenger_id " +
+      "WHERE pt.ticket_id = ?",
+      [ticket.ticket_id]
     );
-    
-    if (!Array.isArray(passengerTickets) || passengerTickets.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No passengers found for this booking' },
-        { status: 404 }
-      );
+
+    if (!passengerResults || passengerResults.length === 0) {
+      return NextResponse.json({ success: false, error: 'No passengers found for this booking' }, { status: 404 });
     }
-    
-    // Calculate refund amount based on cancellation policy
-    // For example: Full refund if cancelled 24+ hours before journey, 50% refund otherwise
+
+    // 4. Calculate refund
     const hoursBeforeJourney = Math.max(0, (journeyDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60));
     const refundPercentage = hoursBeforeJourney >= 24 ? 100 : 50;
-    
-    // Start transaction
-    await query('START TRANSACTION');
+    const totalFare = ticket.total_fare;
+    const refundAmount = Math.floor(totalFare * refundPercentage / 100);
+    const cancellationCharges = totalFare - refundAmount;
     
     try {
-      // Update ticket status to cancelled
-      await query(
-        'UPDATE TICKET SET booking_status = ? WHERE ticket_id = ?',
-        ['CANCELLED', ticketId]
+      // 5. Create cancellation record first
+      await executeQuery(
+        "INSERT INTO CANCELLATION (ticket_id, cancellation_date, reason, refund_amount, cancellation_charges, refund_status) " +
+        "VALUES (?, NOW(), ?, ?, ?, ?)",
+        [ticket.ticket_id, body.reason || 'Customer requested cancellation', refundAmount, cancellationCharges, 'Pending']
       );
       
-      // Update passenger tickets status to cancelled
-      await query(
-        'UPDATE PASSENGER_TICKET SET status = ? WHERE ticket_id = ?',
-        ['CANCELLED', ticketId]
+      // 6. Update passenger tickets status
+      await executeQuery(
+        "UPDATE PASSENGER_TICKET SET status = 'Cancelled' WHERE ticket_id = ?", 
+        [ticket.ticket_id]
       );
       
-      // Create cancellation record
-      const totalFare = ticket.total_fare;
-      const refundAmount = Math.floor(totalFare * refundPercentage / 100);
-      
-      await query(
-        `INSERT INTO CANCELLATION (ticket_id, cancelled_date, refund_amount, reason)
-         VALUES (?, NOW(), ?, ?)`,
-        [ticketId, refundAmount, body.reason || 'User requested cancellation']
+      // 7. Update ticket status last
+      await executeQuery(
+        "UPDATE TICKET SET booking_status = 'Cancelled' WHERE ticket_id = ?", 
+        [ticket.ticket_id]
       );
       
-      // Process waitlisted tickets if there were confirmed tickets in this booking
-      const confirmedTickets = Array.isArray(passengerTickets) ? 
-        passengerTickets.filter(pt => (pt as any).status === 'CONFIRMED') : [];
-      
-      if (confirmedTickets.length > 0) {
-        // Identify waitlisted passengers who can now be confirmed
-        const waitlistedPassengers = await query(
-          `SELECT pt.*, t.journey_id
-           FROM PASSENGER_TICKET pt
-           JOIN TICKET t ON pt.ticket_id = t.ticket_id
-           WHERE t.journey_id = ? AND pt.status = 'WAITLISTED'
-           ORDER BY pt.waitlist_number
-           LIMIT ?`,
-          [ticket.journey_id, confirmedTickets.length]
-        );
-        
-        if (Array.isArray(waitlistedPassengers) && waitlistedPassengers.length > 0) {
-          for (let i = 0; i < waitlistedPassengers.length; i++) {
-            const waitlistedPassenger = waitlistedPassengers[i] as any;
-            const confirmedSeat = confirmedTickets[i] as any;
-            
-            // Update waitlisted passenger to confirmed
-            await query(
-              `UPDATE PASSENGER_TICKET 
-               SET status = ?, waitlist_number = NULL, seat_number = ?, berth_type = ?
-               WHERE passenger_ticket_id = ?`,
-              ['CONFIRMED', confirmedSeat.seat_number, confirmedSeat.berth_type, waitlistedPassenger.passenger_ticket_id]
-            );
-            
-            // Update the ticket status if needed
-            await query(
-              `UPDATE TICKET t
-               SET booking_status = 
-                 CASE 
-                   WHEN NOT EXISTS (
-                     SELECT 1 FROM PASSENGER_TICKET pt 
-                     WHERE pt.ticket_id = t.ticket_id AND pt.status = 'WAITLISTED'
-                   ) THEN 'CONFIRMED'
-                   ELSE 'PARTIALLY_CONFIRMED'
-                 END
-               WHERE ticket_id = ?`,
-              [waitlistedPassenger.ticket_id]
-            );
-          }
-        }
-      }
-      
-      // Commit transaction
-      await query('COMMIT');
-      
-      // Return cancellation details
+      // 8. Return success response
       return NextResponse.json({
         success: true,
+        message: 'Ticket cancelled successfully',
         data: {
-          pnr_number: body.pnr,
-          ticket_id: ticketId,
-          cancelled_at: new Date().toISOString(),
-          total_fare: totalFare,
+          pnr: body.pnr,
           refund_amount: refundAmount,
           refund_percentage: refundPercentage,
-          passengers: passengerTickets.map((pt: any) => ({
-            passenger_id: pt.passenger_id,
-            name: pt.name,
-            was_status: pt.status,
-            was_seat: pt.seat_number,
-          }))
+          cancellation_charges: cancellationCharges,
+          cancelled_at: new Date().toISOString()
         }
       });
-    } catch (transactionError) {
-      // Rollback in case of any error
-      await query('ROLLBACK');
-      throw transactionError;
+    } catch (error) {
+      console.error('Error during cancellation process:', error);
+      throw new Error(`Failed to cancel ticket: ${error instanceof Error ? error.message : String(error)}`);
     }
   } catch (error) {
     console.error('Error cancelling booking:', error);
+    
+    let errorMessage = 'An error occurred while cancelling the booking';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      console.error('Stack trace:', error.stack);
+    }
+    
     return NextResponse.json(
-      { success: false, error: 'An error occurred while cancelling the booking' },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

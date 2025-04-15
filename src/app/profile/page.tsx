@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FaUser, FaTicketAlt, FaHistory, FaEdit, FaSignOutAlt, FaMapMarkedAlt, FaCalendarCheck, FaLock, FaEnvelope, FaPhone } from 'react-icons/fa';
+import { FaUser, FaTicketAlt, FaHistory, FaEdit, FaSignOutAlt, FaMapMarkedAlt, FaCalendarCheck, FaLock, FaEnvelope, FaPhone, FaTimesCircle } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 
 interface Passenger {
@@ -46,6 +46,10 @@ export default function ProfilePage() {
     address: '',
   });
   const [error, setError] = useState('');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const router = useRouter();
   
   useEffect(() => {
@@ -131,6 +135,60 @@ export default function ProfilePage() {
     }
   };
   
+  const handleCancelTicket = async () => {
+    if (!selectedTicket) return;
+    
+    setCancelLoading(true);
+    setCancelError(null);
+    
+    try {
+      const response = await fetch('/api/booking/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pnr: selectedTicket.pnr_number,
+          reason: 'Customer requested cancellation'
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('Cancellation response:', data);
+      
+      if (response.ok && data.success) {
+        // Update ticket status in the local state
+        setTicketHistory(prev => 
+          prev.map(ticket => 
+            ticket.pnr_number === selectedTicket.pnr_number 
+              ? {...ticket, booking_status: 'Cancelled'} 
+              : ticket
+          )
+        );
+        
+        // Close modal
+        setShowCancelModal(false);
+        setSelectedTicket(null);
+        
+        // Show success message
+        alert('Ticket cancelled successfully. Your refund will be processed according to the cancellation policy.');
+      } else {
+        console.error('Cancel ticket error:', data.error);
+        setCancelError(data.error || 'Failed to cancel ticket. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Cancel ticket exception:', error);
+      setCancelError(error.message || 'An error occurred during cancellation.');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+  
+  const handleCancelButtonClick = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setShowCancelModal(true);
+  };
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -170,6 +228,67 @@ export default function ProfilePage() {
   
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && selectedTicket && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-fadeIn">
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                <FaTimesCircle className="text-red-600 text-xl" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900">Cancel Ticket</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-2">
+              Are you sure you want to cancel your ticket from <span className="font-medium">{selectedTicket.source_station}</span> to <span className="font-medium">{selectedTicket.destination_station}</span> on <span className="font-medium">{new Date(selectedTicket.journey_date).toLocaleDateString()}</span>?
+            </p>
+            <ul className="list-disc pl-5 mb-6 space-y-1 text-sm text-gray-600">
+              <li>Full refund if cancelled 24+ hours before journey</li>
+              <li>50% refund if cancelled less than 24 hours before journey</li>
+              <li>No refund after journey has started</li>
+            </ul>
+            
+            {cancelError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+                <p className="font-bold">Error:</p>
+                <p className="text-sm">
+                  {cancelError.includes("UPDATE") && cancelError.includes("ORDER BY") 
+                    ? "Unable to process cancellation due to a database error. Please try again later or contact support." 
+                    : cancelError}
+                </p>
+              </div>
+            )}
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowCancelModal(false);
+                  setSelectedTicket(null);
+                }}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                disabled={cancelLoading}
+              >
+                Keep Ticket
+              </button>
+              <button
+                onClick={handleCancelTicket}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center"
+                disabled={cancelLoading}
+              >
+                {cancelLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                    Processing...
+                  </>
+                ) : (
+                  'Cancel Ticket'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    
       {/* Hero Section */}
       <motion.div 
         className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 text-white"
@@ -324,11 +443,15 @@ export default function ProfilePage() {
                           </div>
                           <div>
                             <span className={`px-2 py-1 rounded-full text-xs ${
-                              ticket.booking_status === 'Confirmed' 
+                              ticket.booking_status === 'Confirmed'
                                 ? 'bg-green-100 text-green-800' 
-                                : ticket.booking_status === 'Waiting' 
+                                : ticket.booking_status === 'Waitlisted'
                                 ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-red-100 text-red-800'
+                                : ticket.booking_status === 'Cancelled'
+                                ? 'bg-red-100 text-red-800'
+                                : ticket.booking_status === 'RAC'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-gray-100 text-gray-800'
                             }`}>
                               {ticket.booking_status}
                             </span>
@@ -359,15 +482,27 @@ export default function ProfilePage() {
                         
                         <div className="mt-4 flex justify-between items-center">
                           <p className="font-bold text-gray-900 dark:text-white">₹{ticket.total_fare.toFixed(2)}</p>
-                          <Link
-                            href={`/booking/confirmed?pnr=${ticket.pnr_number}`}
-                            className="text-blue-600 text-sm font-medium hover:underline flex items-center"
-                          >
-                            View Details
-                            <svg className="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </Link>
+                          <div className="flex items-center space-x-2">
+                            {ticket.booking_status === 'Confirmed' && 
+                              new Date(ticket.journey_date) > new Date() && (
+                              <button
+                                onClick={() => handleCancelButtonClick(ticket)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center"
+                              >
+                                <FaTimesCircle className="mr-1" />
+                                Cancel
+                              </button>
+                            )}
+                            <Link
+                              href={`/booking/confirmed?pnr=${ticket.pnr_number}`}
+                              className="text-blue-600 text-sm font-medium hover:underline flex items-center"
+                            >
+                              View Details
+                              <svg className="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </Link>
+                          </div>
                         </div>
                       </motion.div>
                     ))}

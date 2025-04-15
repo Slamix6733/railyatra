@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FaTrain, FaTicketAlt, FaUser, FaWallet, FaCalendarAlt, FaMapMarkerAlt, FaClock, FaDownload, FaShareAlt, FaCheck } from 'react-icons/fa';
+import { FaTrain, FaTicketAlt, FaUser, FaWallet, FaCalendarAlt, FaMapMarkerAlt, FaClock, FaDownload, FaShareAlt, FaCheck, FaTimesCircle, FaEdit } from 'react-icons/fa';
 import { downloadTicketAsPDF } from '@/lib/pdfUtils';
 
 interface TicketData {
@@ -32,6 +32,7 @@ interface TicketData {
   payment_method: string;
   booking_time: string;
   ticket_id?: number;
+  booking_status: string;
 }
 
 export default function BookingConfirmationPage() {
@@ -40,8 +41,15 @@ export default function BookingConfirmationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelSuccess, setCancelSuccess] = useState(false);
   const confettiRef = useRef<HTMLDivElement>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [otherReason, setOtherReason] = useState('');
   
   useEffect(() => {
     // Get ticket data from session storage first
@@ -127,7 +135,8 @@ export default function BookingConfirmationPage() {
         contact_phone: ticketPassengers[0]?.contact_number || '',
         total_fare: apiTicket.total_fare,
         payment_method: apiTicket.payment_method || 'online',
-        booking_time: apiTicket.booking_date
+        booking_time: apiTicket.booking_date,
+        booking_status: apiTicket.booking_status
       });
       
       // Create success animation after a short delay
@@ -240,6 +249,80 @@ export default function BookingConfirmationPage() {
     // In a real app, this would open a share dialog or generate a shareable link
   };
   
+  const handleCancelTicket = async () => {
+    if (!ticket) return;
+    
+    // Validate that a reason is selected
+    if (!cancellationReason) {
+      setCancelError("Please select a reason for cancellation.");
+      return;
+    }
+    
+    // For "Other" reason, validate that text is entered
+    if (cancellationReason === 'Other' && !otherReason.trim()) {
+      setCancelError("Please specify your reason for cancellation.");
+      return;
+    }
+    
+    setCancelLoading(true);
+    setCancelError(null);
+    
+    try {
+      const response = await fetch('/api/booking/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pnr: ticket.pnr,
+          reason: cancellationReason === 'Other' ? otherReason : cancellationReason
+        }),
+      });
+      
+      const data = await response.json();
+      console.log('Cancellation response:', data);
+      
+      if (response.ok && data.success) {
+        setCancelSuccess(true);
+        // Update the ticket status locally
+        setTicket(prev => prev ? {...prev, booking_status: 'Cancelled'} : null);
+        
+        // Close the modal after a short delay
+        setTimeout(() => {
+          setShowCancelModal(false);
+          // Redirect to profile page after successful cancellation
+          router.push('/profile');
+        }, 2000);
+      } else {
+        console.error('Cancel ticket error:', data.error);
+        setCancelError(data.error || 'Failed to cancel ticket. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Cancel ticket exception:', error);
+      setCancelError(error.message || 'An error occurred during cancellation.');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+  
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      try {
+        const user = localStorage.getItem('user');
+        if (user) {
+          const userData = JSON.parse(user);
+          // Check if user has admin role
+          setIsAdmin(userData.role === 'admin');
+        }
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+      }
+    };
+    
+    checkAdminStatus();
+  }, []);
+  
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
@@ -302,6 +385,114 @@ export default function BookingConfirmationPage() {
         `}</style>
       </div>
       
+      {/* Cancel Confirmation Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-fadeIn">
+            {cancelSuccess ? (
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto bg-green-100 rounded-full flex items-center justify-center mb-4">
+                  <FaCheck className="text-green-600 text-2xl" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Ticket Cancelled Successfully</h3>
+                <p className="text-gray-600 mb-6">Your refund will be processed according to the cancellation policy.</p>
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    router.push('/profile');
+                  }}
+                  className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Return to Profile
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-center mb-6">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                    <FaTimesCircle className="text-red-600 text-xl" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">Cancel Ticket</h3>
+                </div>
+                
+                <p className="text-gray-600 mb-2">
+                  Are you sure you want to cancel this ticket? Refund will be processed according to the cancellation policy:
+                </p>
+                <ul className="list-disc pl-5 mb-4 space-y-1 text-sm text-gray-600">
+                  <li>Full refund if cancelled 24+ hours before journey</li>
+                  <li>50% refund if cancelled less than 24 hours before journey</li>
+                  <li>No refund after journey has started</li>
+                </ul>
+                
+                <div className="mb-4">
+                  <label htmlFor="cancellationReason" className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason for cancellation
+                  </label>
+                  <select
+                    id="cancellationReason"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={cancellationReason}
+                    onChange={(e) => setCancellationReason(e.target.value)}
+                  >
+                    <option value="">Select a reason</option>
+                    <option value="Change of plans">Change of plans</option>
+                    <option value="Found better alternative">Found better alternative</option>
+                    <option value="Emergency situation">Emergency situation</option>
+                    <option value="Booking error">Booking error</option>
+                    <option value="Weather conditions">Weather conditions</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  {cancellationReason === 'Other' && (
+                    <textarea
+                      className="w-full mt-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Please specify your reason..."
+                      value={otherReason}
+                      onChange={(e) => setOtherReason(e.target.value)}
+                      rows={2}
+                    />
+                  )}
+                </div>
+                
+                {cancelError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+                    <p className="font-bold">Error:</p>
+                    <p className="text-sm">
+                      {cancelError.includes("UPDATE") && cancelError.includes("ORDER BY") 
+                        ? "Unable to process cancellation due to a database error. Please try again later or contact support." 
+                        : cancelError}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowCancelModal(false)}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                    disabled={cancelLoading}
+                  >
+                    Keep Ticket
+                  </button>
+                  <button
+                    onClick={handleCancelTicket}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center"
+                    disabled={cancelLoading || !cancellationReason || (cancellationReason === 'Other' && !otherReason.trim())}
+                  >
+                    {cancelLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+                        Processing...
+                      </>
+                    ) : (
+                      'Cancel Ticket'
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      
       {/* Success Message */}
       <div className="bg-green-100 border border-green-200 text-green-800 rounded-xl p-6 mb-6 flex items-start animate-fadeIn">
         <div className="bg-green-200 rounded-full p-2 mr-4">
@@ -329,6 +520,15 @@ export default function BookingConfirmationPage() {
             </div>
             
             <div className="flex space-x-3 animate-slideInRight" style={{ animationDelay: '0.3s' }}>
+              {isAdmin && (
+                <Link
+                  href={`/admin/tickets/update/${ticket.pnr}`}
+                  className="px-4 py-2 bg-yellow-500/60 hover:bg-yellow-500/80 rounded-lg flex items-center text-sm font-medium transition-colors"
+                >
+                  <FaEdit className="mr-2" />
+                  Admin Edit
+                </Link>
+              )}
               <button 
                 onClick={handleDownloadTicket}
                 className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg flex items-center text-sm font-medium transition-colors"
@@ -528,9 +728,26 @@ export default function BookingConfirmationPage() {
           
           {/* Bottom Actions */}
           <div className="mt-8 flex flex-wrap justify-between items-center animate-fadeIn" style={{ animationDelay: '1s' }}>
-            <p className="text-sm text-gray-500 mb-4 md:mb-0">
-              For any assistance, please contact us at <span className="text-blue-600">support@railyatra.com</span>
-            </p>
+            <div className="flex space-x-4 mb-4 md:mb-0">
+              <p className="text-sm text-gray-500">
+                For any assistance, please contact us at <span className="text-blue-600">support@railyatra.com</span>
+              </p>
+              {ticket.booking_status !== 'Cancelled' && (
+                <button
+                  onClick={() => setShowCancelModal(true)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center"
+                >
+                  <FaTimesCircle className="mr-1" />
+                  Cancel Ticket
+                </button>
+              )}
+              {ticket.booking_status === 'Cancelled' && (
+                <span className="text-red-600 text-sm font-medium flex items-center">
+                  <FaTimesCircle className="mr-1" />
+                  Ticket Cancelled
+                </span>
+              )}
+            </div>
             
             <Link
               href="/trains"
