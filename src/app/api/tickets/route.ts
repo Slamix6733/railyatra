@@ -367,15 +367,39 @@ export async function POST(request: NextRequest) {
         throw new Error('At least one passenger is required');
       }
       
-      // Check if passengers exist
-      for (const passenger of body.passengers) {
-        if (!passenger.passenger_id) {
-          throw new Error('passenger_id is required for each passenger');
-        }
+      // Process passenger information - create new records for passengers without IDs
+      for (let i = 0; i < body.passengers.length; i++) {
+        const passenger = body.passengers[i];
         
-        const passengerExists = await query('SELECT * FROM PASSENGER WHERE passenger_id = ?', [passenger.passenger_id]);
-        if (!Array.isArray(passengerExists) || passengerExists.length === 0) {
-          throw new Error(`Passenger with ID ${passenger.passenger_id} not found`);
+        // If passenger has ID, verify it exists
+        if (passenger.passenger_id) {
+          const passengerExists = await query('SELECT * FROM PASSENGER WHERE passenger_id = ?', [passenger.passenger_id]);
+          if (!Array.isArray(passengerExists) || passengerExists.length === 0) {
+            throw new Error(`Passenger with ID ${passenger.passenger_id} not found`);
+          }
+        } else {
+          // Create new passenger record if passenger_id is not provided
+          try {
+            const newPassengerResult = await query(
+              `INSERT INTO PASSENGER (name, age, gender, contact_number, email, concession_category)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+              [
+                passenger.name,
+                passenger.age,
+                passenger.gender,
+                body.contact_phone || '',  // Use contact info from booking data
+                body.contact_email || '',
+                passenger.concession_category || 'None'
+              ]
+            );
+            
+            // Update the passenger object with the new ID
+            body.passengers[i].passenger_id = (newPassengerResult as any).insertId;
+            console.log(`Created new passenger with ID: ${body.passengers[i].passenger_id}`);
+          } catch (createError) {
+            console.error('Error creating new passenger:', createError);
+            throw new Error(`Failed to create passenger record for ${passenger.name}`);
+          }
         }
       }
       

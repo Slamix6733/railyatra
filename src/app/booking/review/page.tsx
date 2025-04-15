@@ -358,18 +358,20 @@ export default function BookingReview() {
       const totalFare = calculateTotalFare() + 30 + (calculateTotalFare() + 30) * 0.05;
       
       // Prepare ticket creation request
-      // We're using the logged-in user as the primary passenger
+      // Include all passengers from booking data, not just the logged-in user
       const ticketRequest = {
         journey_id,
-        passengers: [{
-          passenger_id: user.passenger_id,
-          name: user.name || bookingData?.passengers[0]?.name,
-          age: user.age || bookingData?.passengers[0]?.age || 30,
-          gender: user.gender || bookingData?.passengers[0]?.gender || 'Male',
-          berth_preference: bookingData?.passengers[0]?.berth_preference || 'No Preference',
+        passengers: bookingData?.passengers.map((passenger, index) => ({
+          passenger_id: index === 0 ? user.passenger_id : undefined, // Use user's ID for first passenger
+          name: index === 0 ? (user.name || passenger.name) : passenger.name,
+          age: index === 0 ? (user.age || passenger.age) : passenger.age,
+          gender: index === 0 ? (user.gender || passenger.gender) : passenger.gender,
+          berth_preference: passenger.berth_preference || 'No Preference',
           class_code: selectedClass?.class_code || 'SL',
-          is_primary_passenger: true
-        }],
+          is_primary_passenger: index === 0 // First passenger is primary
+        })),
+        contact_email: bookingData?.contact_email || user.email || '',
+        contact_phone: bookingData?.contact_phone || user.contact_number || '',
         total_fare: totalFare,
         payment: {
           amount: totalFare,
