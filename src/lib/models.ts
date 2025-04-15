@@ -11,6 +11,8 @@ export interface Train {
   standard_departure_time?: string;  // From schedules API
   standard_arrival_time?: string;    // From schedules API
   journey_distance?: number;     // From schedules API
+  run_days?: string;            // From schedules API (e.g., "Mon,Wed,Fri" or "Daily")
+  train_type?: string;          // From schedules API (e.g., "Superfast", "Premium")
 }
 
 // Train Information model

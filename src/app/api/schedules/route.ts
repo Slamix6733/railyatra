@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
     
     // Search for trains between source and destination on a specific date
     if (source && destination && date) {
+      // First, get trains with existing schedules for the date
       const trainSchedules = await query(
         `SELECT DISTINCT s.*, 
           t.train_number, t.train_name, t.train_type, t.run_days,
@@ -95,8 +96,7 @@ export async function GET(request: NextRequest) {
         AND (src.station_id = ? OR src.station_code = ? OR src.station_name LIKE ?)
         AND (dest.station_id = ? OR dest.station_code = ? OR dest.station_name LIKE ?)
         AND rs_src.sequence_number < rs_dest.sequence_number
-        AND s.status != 'Cancelled'
-        ORDER BY s.journey_date, rs_src.standard_departure_time`,
+        AND s.status != 'Cancelled'`,
         [
           date, 
           source, source, `%${source}%`,
@@ -104,10 +104,83 @@ export async function GET(request: NextRequest) {
         ]
       );
       
+      // Get the day of week from the date (0 = Sunday, 1 = Monday, etc.)
+      const selectedDate = new Date(date);
+      const dayOfWeek = selectedDate.getDay();
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const dayName = dayNames[dayOfWeek];
+      
+      console.log(`API: Finding trains for ${date} (${dayName})`);
+      
+      // Now, find trains that run between these stations on this day of week
+      // even if they don't have a schedule entry for this specific date
+      const potentialTrains = await query(
+        `SELECT DISTINCT 
+          t.train_id, t.train_number, t.train_name, t.train_type, t.run_days,
+          src.station_name as source_station, src.station_code as source_code,
+          dest.station_name as destination_station, dest.station_code as destination_code,
+          te.standard_departure_time, te.standard_arrival_time,
+          src.station_id as source_station_id, dest.station_id as destination_station_id
+        FROM TRAIN t
+        JOIN TRAIN_ENDPOINTS te ON t.train_id = te.train_id
+        JOIN STATION src ON te.source_station_id = src.station_id
+        JOIN STATION dest ON te.destination_station_id = dest.station_id
+        LEFT JOIN SCHEDULE s ON t.train_id = s.train_id AND s.journey_date = ?
+        WHERE 
+          (src.station_id = ? OR src.station_code = ? OR src.station_name LIKE ?)
+          AND (dest.station_id = ? OR dest.station_code = ? OR dest.station_name LIKE ?)
+          AND s.schedule_id IS NULL
+          AND (t.run_days = 'Daily' OR t.run_days LIKE ?)`,
+        [
+          date,
+          source, source, `%${source}%`,
+          destination, destination, `%${destination}%`,
+          `%${dayName}%`
+        ]
+      );
+      
+      console.log(`API: Found ${Array.isArray(trainSchedules) ? trainSchedules.length : 0} trains with schedules`);
+      console.log(`API: Found ${Array.isArray(potentialTrains) ? potentialTrains.length : 0} potential trains without schedules`);
+      
+      // Create virtual schedule entries for the potential trains
+      let virtualSchedules: any[] = [];
+      if (Array.isArray(potentialTrains) && potentialTrains.length > 0) {
+        virtualSchedules = potentialTrains.map((train: any) => {
+          // Create a virtual schedule entry
+          return {
+            schedule_id: `virtual_${train.train_id}_${date}`,
+            train_id: train.train_id,
+            journey_date: date,
+            status: 'On Time',
+            delay_time: 0,
+            train_number: train.train_number,
+            train_name: train.train_name,
+            train_type: train.train_type,
+            run_days: train.run_days,
+            source_station: train.source_station,
+            source_code: train.source_code,
+            destination_station: train.destination_station,
+            destination_code: train.destination_code,
+            standard_departure_time: train.standard_departure_time,
+            standard_arrival_time: train.standard_arrival_time,
+            source_station_id: train.source_station_id,
+            destination_station_id: train.destination_station_id,
+            // Calculate journey distance if needed
+            journey_distance: 0 // Placeholder
+          };
+        });
+      }
+      
+      // Combine actual schedules with virtual ones
+      const combinedSchedules = [
+        ...(Array.isArray(trainSchedules) ? trainSchedules : []),
+        ...virtualSchedules
+      ];
+      
       return NextResponse.json({ 
         success: true, 
-        count: Array.isArray(trainSchedules) ? trainSchedules.length : 0,
-        data: trainSchedules 
+        count: combinedSchedules.length,
+        data: combinedSchedules 
       });
     }
     

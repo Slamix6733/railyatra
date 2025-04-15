@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Train } from '@/lib/models';
 import Link from 'next/link';
+import { isDateInFuture, filterTrainsByRunDay } from '@/lib/utils';
+import TrainRunDaysDisplay from '@/components/TrainRunDaysDisplay';
 
 export default function TrainSearch() {
   const [trains, setTrains] = useState<Train[]>([]);
@@ -61,26 +63,69 @@ export default function TrainSearch() {
       if (destination) queryParams.append('destination', destination);
       if (date) queryParams.append('date', date);
       
+      // Debug search parameters
+      console.log('Search params:', {
+        source,
+        destination,
+        date,
+        url: `/api/schedules?${queryParams.toString()}`
+      });
+      
       // Use the schedules API which properly checks route segments
       const response = await fetch(`/api/schedules?${queryParams.toString()}`);
       const result = await response.json();
       
+      console.log('API response:', result);
+      
       if (result.success) {
-        // The schedules API properly checks for stations in route
-        // and ensures source comes before destination
-        setTrains(result.data);
-        if (result.data.length === 0) {
-          setError('No trains found for this route');
+        // Check if the selected date is in the future
+        const selectedDate = new Date(date);
+        let filteredTrains = result.data;
+        
+        // Debug all trains returned from API
+        console.log('All trains from API:', filteredTrains);
+        
+        // If the date is in the future, filter trains based on their run_days
+        if (isDateInFuture(selectedDate)) {
+          // Check day of week for debugging
+          const dayOfWeek = selectedDate.getDay();
+          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          console.log(`Selected date ${date} is ${dayNames[dayOfWeek]}`);
+          
+          // Log each train's run_days before filtering
+          filteredTrains.forEach((train: any) => {
+            console.log(`Train ${train.train_name} (${train.train_id}) runs on: ${train.run_days || 'Daily (undefined)'}`);
+          });
+          
+          // Apply run days filtering
+          filteredTrains = filterTrainsByRunDay(result.data, selectedDate);
+          
+          // Log filter results
+          console.log('Before filtering:', result.data.length);
+          console.log('After filtering:', filteredTrains.length);
+          
+          // Log each filtered train
+          filteredTrains.forEach((train: any) => {
+            console.log(`Filtered in: ${train.train_name} (${train.train_id})`);
+          });
+        }
+        
+        // Set the filtered trains
+        setTrains(filteredTrains);
+        
+        if (filteredTrains.length === 0) {
+          setError('No trains found for this route on the selected date. Please check browser console for debugging information.');
         } else {
           // If trains found, switch to results tab
           setActiveTab('results');
         }
       } else {
         setError(result.error || 'Failed to fetch trains');
+        console.error('API returned error:', result.error);
       }
     } catch (error) {
       setError('Error connecting to the server');
-      console.error(error);
+      console.error('Network error:', error);
     } finally {
       setLoading(false);
     }
@@ -288,50 +333,52 @@ export default function TrainSearch() {
       {/* Results */}
       {activeTab === 'results' && (
         <div className="p-6 md:p-8 animate-fadeIn">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800 animate-slideInLeft">
-              Trains: {source} to {destination}
-            </h2>
-            <p className="text-sm text-gray-600">
-              Journey Date: {date ? new Date(date).toDateString() : ''}
-            </p>
+          <h1 className="text-2xl font-bold text-white mb-6 bg-blue-700 p-3 rounded-lg shadow-sm animate-slideInDown">Search Results</h1>
+          
+          {error && (
+            <div className="mb-6 p-3 bg-red-100 text-red-700 rounded border border-red-200">
+              <div className="flex items-center">
+                <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+                {error}
+              </div>
+            </div>
+          )}
+          
+          <div className="mb-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <div className="flex flex-col md:flex-row md:items-center justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-gray-900">
+                  {trains.length} {trains.length === 1 ? 'Train' : 'Trains'} Found
+                </h2>
+                <p className="text-sm text-gray-600">
+                  From <span className="font-medium">{source}</span> to <span className="font-medium">{destination}</span> on <span className="font-medium">{new Date(date).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                </p>
+              </div>
+              
+              <div className="mt-3 md:mt-0">
+                <span className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Click on a train to view details
+                </span>
+              </div>
+            </div>
           </div>
           
-          {trains.length === 0 ? (
-            <div className="text-center py-12 animate-fadeIn">
-              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-lg font-medium text-gray-700 mb-1 animate-slideInUp" style={{animationDelay: '100ms'}}>No trains found</h3>
-              <p className="text-gray-500 animate-slideInUp" style={{animationDelay: '200ms'}}>Try different stations or dates</p>
-              <button
-                onClick={() => setActiveTab('search')}
-                className="mt-4 px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-md hover:bg-blue-50 transition-all duration-300 transform hover:scale-105 animate-slideInUp"
-                style={{animationDelay: '300ms'}}
-              >
-                Modify Search
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto animate-fadeIn">
+          {trains.length > 0 ? (
+            <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
-                  <tr className="stagger-animation">
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider animate-slideInDown">
-                      Train
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider animate-slideInDown">
-                      Departure
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider animate-slideInDown">
-                      Arrival
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider animate-slideInDown">
-                      Duration
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider animate-slideInDown">
-                      Action
-                    </th>
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Train Details</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departure</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Running Days</th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -354,7 +401,10 @@ export default function TrainSearch() {
                           {train.journey_distance ? `${Math.round(train.journey_distance)} km` : "14h 45m"}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <TrainRunDaysDisplay runDays={train.run_days} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
                         <Link
                           href={`/booking/passengers?train=${train.train_id}&class=${travelClass || 'SL'}&date=${date}&from=${train.source_station}&to=${train.destination_station}`}
                           className="px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-all duration-300 transform hover:scale-105 hover:shadow-md animate-slideInRight"
@@ -367,6 +417,18 @@ export default function TrainSearch() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg animate-fadeIn">
+              <p className="flex items-center">
+                <svg className="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                No trains found for this route and date combination.
+              </p>
+              <p className="mt-2 text-sm">
+                Try another date or different stations.
+              </p>
             </div>
           )}
           
