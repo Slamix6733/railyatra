@@ -4,9 +4,7 @@ const config = {
     "postcss-preset-env": {
       features: {
         "custom-properties": false,
-        "nesting-rules": true,
-        "color-function": true,
-        "color-functional-notation": true
+        "nesting-rules": true
       }
     }
   },

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FaUser, FaTicketAlt, FaHistory, FaEdit, FaSignOutAlt, FaMapMarkedAlt, FaCalendarCheck, FaLock, FaEnvelope, FaPhone } from 'react-icons/fa';
+import { motion } from 'framer-motion';
 
 interface Passenger {
   passenger_id: number;
@@ -168,163 +169,240 @@ export default function ProfilePage() {
   }
   
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="bg-white shadow-lg rounded-lg overflow-hidden max-w-4xl mx-auto">
-        <div className="bg-blue-600 p-6 text-white">
-          <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold">My Profile</h1>
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Hero Section */}
+      <motion.div 
+        className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 text-white"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+      >
+        <div className="container mx-auto px-4 py-16">
+          <div className="max-w-4xl mx-auto text-center">
+            <motion.h1 
+              className="text-4xl md:text-5xl font-bold mb-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2 }}
+            >
+              My Profile
+            </motion.h1>
+            <motion.p 
+              className="text-xl text-blue-100 mb-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.4 }}
+            >
+              Manage your account and view your booking history
+            </motion.p>
+          </div>
+        </div>
+      </motion.div>
+      
+      <motion.div 
+        className="container mx-auto px-4 py-8 -mt-6 relative z-10"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.5 }}
+      >
+        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden max-w-4xl mx-auto border border-gray-100 dark:border-gray-700">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center">
+              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mr-4">
+                <FaUser className="w-6 h-6 text-blue-700 dark:text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{user.name}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+              </div>
+            </div>
             <button
               onClick={handleLogout}
-              className="bg-white text-blue-600 px-4 py-2 rounded-md font-medium hover:bg-gray-100"
+              className="bg-red-600 text-white px-4 py-2 rounded-md font-medium hover:bg-red-700 transition-colors flex items-center"
             >
-              Logout
+              <FaSignOutAlt className="mr-2" /> Logout
             </button>
           </div>
-        </div>
         
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Personal Information</h2>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-gray-500 text-sm">Full Name</p>
-                  <p className="font-medium">{user.name}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-sm">Email</p>
-                  <p className="font-medium">{user.email}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-sm">Contact Number</p>
-                  <p className="font-medium">{user.contact_number}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-sm">Age</p>
-                  <p className="font-medium">{user.age}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500 text-sm">Gender</p>
-                  <p className="font-medium">{user.gender}</p>
-                </div>
-                {user.address && (
-                  <div>
-                    <p className="text-gray-500 text-sm">Address</p>
-                    <p className="font-medium">{user.address}</p>
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mr-3">
+                    <FaUser className="w-5 h-5 text-blue-700 dark:text-blue-400" />
                   </div>
-                )}
-                
-                {user.id_proof_type && user.id_proof_number && (
-                  <div>
-                    <p className="text-gray-500 text-sm">ID Proof</p>
-                    <p className="font-medium">{user.id_proof_type}: {user.id_proof_number}</p>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h2>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-xl border border-gray-100 dark:border-gray-600">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Full Name</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{user.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Email</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{user.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Contact Number</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{user.contact_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Age</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{user.age}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">Gender</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{user.gender}</p>
+                    </div>
+                    {user.address && (
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Address</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{user.address}</p>
+                      </div>
+                    )}
+                    
+                    {user.id_proof_type && user.id_proof_number && (
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">ID Proof</p>
+                        <p className="font-medium text-gray-900 dark:text-white">{user.id_proof_type}: {user.id_proof_number}</p>
+                      </div>
+                    )}
+                    
+                    {user.concession_category && user.concession_category !== 'None' && (
+                      <div>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Concession Category</p>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {user.concession_category}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                {user.concession_category && user.concession_category !== 'None' && (
-                  <div>
-                    <p className="text-gray-500 text-sm">Concession Category</p>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {user.concession_category}
-                    </span>
+                  
+                  <div className="mt-6">
+                    <Link
+                      href="/profile/edit"
+                      className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 transition-colors flex items-center w-max"
+                    >
+                      <FaEdit className="mr-2" /> Edit Profile
+                    </Link>
                   </div>
-                )}
-              </div>
+                </div>
+              </motion.div>
               
-              <div className="mt-6">
-                <Link
-                  href="/profile/edit"
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700"
-                >
-                  Edit Profile
-                </Link>
-              </div>
-            </div>
-            
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Recent Bookings</h2>
-              {ticketHistory.length > 0 ? (
-                <div className="space-y-4">
-                  {ticketHistory.slice(0, 3).map((ticket) => (
-                    <div key={ticket.ticket_id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md">
-                      <div className="flex justify-between">
-                        <div>
-                          <h3 className="font-bold text-blue-600">{ticket.train_name}</h3>
-                          <p className="text-sm text-gray-600">{ticket.train_number}</p>
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center mr-3">
+                    <FaTicketAlt className="w-5 h-5 text-blue-700 dark:text-blue-400" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Recent Bookings</h2>
+                </div>
+                
+                {ticketHistory.length > 0 ? (
+                  <div className="space-y-4">
+                    {ticketHistory.slice(0, 3).map((ticket, index) => (
+                      <motion.div 
+                        key={ticket.ticket_id} 
+                        className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition-all"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.1 * index }}
+                        whileHover={{ y: -5, boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}
+                      >
+                        <div className="flex justify-between">
+                          <div>
+                            <h3 className="font-bold text-gray-900 dark:text-white">{ticket.train_name}</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{ticket.train_number}</p>
+                          </div>
+                          <div>
+                            <span className={`px-2 py-1 rounded-full text-xs ${
+                              ticket.booking_status === 'Confirmed' 
+                                ? 'bg-green-100 text-green-800' 
+                                : ticket.booking_status === 'Waiting' 
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {ticket.booking_status}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <span className={`px-2 py-1 rounded-full text-xs ${
-                            ticket.booking_status === 'Confirmed' 
-                              ? 'bg-green-100 text-green-800' 
-                              : ticket.booking_status === 'Waiting' 
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {ticket.booking_status}
-                          </span>
+                        
+                        <div className="mt-3 flex justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">From</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{ticket.source_station}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">To</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{ticket.destination_station}</p>
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="mt-3 flex justify-between">
-                        <div>
-                          <p className="text-sm text-gray-500">From</p>
-                          <p className="font-medium">{ticket.source_station}</p>
+                        
+                        <div className="mt-3 flex justify-between">
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Date</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{new Date(ticket.journey_date).toLocaleDateString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">PNR</p>
+                            <p className="font-medium text-gray-900 dark:text-white">{ticket.pnr_number}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500">To</p>
-                          <p className="font-medium">{ticket.destination_station}</p>
+                        
+                        <div className="mt-4 flex justify-between items-center">
+                          <p className="font-bold text-gray-900 dark:text-white">₹{ticket.total_fare.toFixed(2)}</p>
+                          <Link
+                            href={`/booking/confirmed?pnr=${ticket.pnr_number}`}
+                            className="text-blue-600 text-sm font-medium hover:underline flex items-center"
+                          >
+                            View Details
+                            <svg className="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                          </Link>
                         </div>
-                      </div>
-                      
-                      <div className="mt-3 flex justify-between">
-                        <div>
-                          <p className="text-sm text-gray-500">Date</p>
-                          <p className="font-medium">{new Date(ticket.journey_date).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">PNR</p>
-                          <p className="font-medium">{ticket.pnr_number}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-4 flex justify-between items-center">
-                        <p className="font-bold">₹{ticket.total_fare.toFixed(2)}</p>
+                      </motion.div>
+                    ))}
+                    
+                    {ticketHistory.length > 3 && (
+                      <div className="text-center mt-6">
                         <Link
-                          href={`/booking/confirmed?pnr=${ticket.pnr_number}`}
-                          className="text-blue-600 text-sm font-medium hover:underline"
+                          href="/profile/bookings"
+                          className="text-blue-600 font-medium hover:underline flex items-center justify-center"
                         >
-                          View Details
+                          <FaHistory className="mr-2" />
+                          View All Bookings
+                          <svg className="w-4 h-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L12.586 11H5a1 1 0 110-2h7.586l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
                         </Link>
                       </div>
-                    </div>
-                  ))}
-                  
-                  {ticketHistory.length > 3 && (
-                    <div className="text-center mt-4">
-                      <Link
-                        href="/profile/bookings"
-                        className="text-blue-600 font-medium hover:underline"
-                      >
-                        View All Bookings
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-gray-50 p-6 rounded-lg text-center">
-                  <p className="text-gray-500">You haven't made any bookings yet.</p>
-                  <Link
-                    href="/trains"
-                    className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700"
-                  >
-                    Book a Ticket
-                  </Link>
-                </div>
-              )}
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg text-center border border-gray-200 dark:border-gray-600">
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">You haven't made any bookings yet.</p>
+                    <Link
+                      href="/trains"
+                      className="inline-block bg-blue-600 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Book a Ticket
+                    </Link>
+                  </div>
+                )}
+              </motion.div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 } 
