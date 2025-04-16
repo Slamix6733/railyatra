@@ -476,6 +476,7 @@ async function getRevenueStats(startDate: string, endDate: string) {
 
 async function getCancellationStats(startDate: string, endDate: string) {
   try {
+    // Changed to include all cancellations regardless of date range
     const totalQuery = `
       SELECT COUNT(*) as total
       FROM CANCELLATION
