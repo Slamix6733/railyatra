@@ -168,7 +168,7 @@ The application follows a modern web architecture:
 
 ## License
 
-This project is created for educational purposes as part of the CS202 Mini Project.
+This project is created for educational purposes as part of the CS2202 Mini Project.
 
 ## Acknowledgments
 
