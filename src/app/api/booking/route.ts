@@ -96,12 +96,36 @@ export async function POST(request: NextRequest) {
       ? (bookedSeatsCheck[0] as QueryRow).booked_count || 0
       : 0;
       
-    const availableSeats = totalSeats - bookedSeats;
+    // Calculate thresholds for RAC and Waitlist
+    const racThreshold = Math.floor(totalSeats * 0.9); // RAC starts when 90% seats are booked
+    const availableConfirmedSeats = racThreshold - bookedSeats;
+    const availableRacSeats = totalSeats - racThreshold;
     
-    // Determine how many seats can be confirmed vs waitlisted
-    const confirmedPassengerCount = Math.min(body.passenger_details.length, availableSeats);
-    const racPassengerCount = 0; // For simplicity, not implementing RAC
-    const waitlistedPassengerCount = body.passenger_details.length - confirmedPassengerCount;
+    // Calculate how many passengers get confirmed, RAC, and waitlisted status
+    let confirmedPassengerCount = 0;
+    let racPassengerCount = 0;
+    let waitlistedPassengerCount = 0;
+    
+    if (bookedSeats < racThreshold) {
+      // Some confirmed seats are still available
+      confirmedPassengerCount = Math.min(body.passenger_details.length, availableConfirmedSeats);
+      // If there are more passengers than confirmed seats, they go to RAC
+      racPassengerCount = Math.min(
+        body.passenger_details.length - confirmedPassengerCount,
+        availableRacSeats
+      );
+    } else if (bookedSeats < totalSeats) {
+      // All confirmed seats are booked, but RAC is available
+      confirmedPassengerCount = 0;
+      racPassengerCount = Math.min(body.passenger_details.length, totalSeats - bookedSeats);
+    } else {
+      // All seats including RAC are filled
+      confirmedPassengerCount = 0;
+      racPassengerCount = 0;
+    }
+    
+    // Anyone who didn't get confirmed or RAC status goes to waitlist
+    waitlistedPassengerCount = body.passenger_details.length - confirmedPassengerCount - racPassengerCount;
     
     // Get the current highest waitlist number if any passengers will be waitlisted
     let currentWaitlistNumber = 0;
@@ -181,8 +205,11 @@ export async function POST(request: NextRequest) {
       ? 'CONFIRMED' 
       : (confirmedPassengerCount > 0 ? 'PARTIALLY_CONFIRMED' : 'WAITLISTED');
       
-    // Generate PNR number (10-digit alphanumeric)
-    const pnrNumber =  Math.floor(Math.random() * 9000000000 + 1000000000);
+    // Generate PNR number based on ticket table size
+    const ticketCountResult = await query('SELECT COUNT(*) as count FROM TICKET');
+    const ticketCount = Array.isArray(ticketCountResult) && ticketCountResult.length > 0 
+                      ? (ticketCountResult[0] as any).count : 0;
+    const pnrNumber = 1000 + ticketCount + 1;
     
     // Insert ticket
     const ticketResult = await query(
@@ -225,7 +252,7 @@ export async function POST(request: NextRequest) {
       if (passenger.status === 'CONFIRMED') {
         // Get the next available seat number
         const seatCheck = await query(
-          `SELECT MAX(seat_number) as last_seat
+          `SELECT MAX(CAST(seat_number AS UNSIGNED)) as last_seat
            FROM PASSENGER_TICKET pt
            JOIN TICKET t ON pt.ticket_id = t.ticket_id
            WHERE t.journey_id = ? AND pt.status = 'CONFIRMED'`,
@@ -241,6 +268,26 @@ export async function POST(request: NextRequest) {
         // Assign berth type (SL, 3AC, 2AC, etc.)
         const berthTypes = ['LOWER', 'MIDDLE', 'UPPER', 'SIDE LOWER', 'SIDE UPPER'];
         berthType = berthTypes[seatNumber % berthTypes.length];
+      } else if (passenger.status === 'RAC') {
+        // For RAC, use a special seat number format: RAC1, RAC2, etc.
+        // Get the next available RAC position
+        const racPositionCheck = await query(
+          `SELECT MAX(SUBSTRING_INDEX(seat_number, 'RAC', -1)) as last_rac_position
+           FROM PASSENGER_TICKET pt
+           JOIN TICKET t ON pt.ticket_id = t.ticket_id
+           WHERE t.journey_id = ? AND pt.status = 'RAC' AND seat_number LIKE 'RAC%'`,
+          [body.journey_id]
+        );
+        
+        const lastRacPosition = Array.isArray(racPositionCheck) && racPositionCheck.length > 0
+          ? parseInt((racPositionCheck[0] as QueryRow).last_rac_position || '0')
+          : 0;
+          
+        const racPosition = lastRacPosition + 1;
+        seatNumber = `RAC${racPosition}`;
+        
+        // Assign LOWER berth to RAC passengers for better comfort
+        berthType = 'LOWER';
       }
       
       // Insert passenger ticket

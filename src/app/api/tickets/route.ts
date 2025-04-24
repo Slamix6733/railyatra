@@ -295,6 +295,12 @@ function generateSeatNumber(classCode: string, berth_preference: string) {
     }
   }
   
+  // Special handling for RAC tickets
+  if (seatNumber.toString().startsWith('RAC')) {
+    // Assign LOWER berth to RAC passengers for better comfort
+    berthType = 'LOWER';
+  }
+  
   return {
     coach,
     seatNumber,
@@ -408,8 +414,11 @@ export async function POST(request: NextRequest) {
         throw new Error('Payment amount, mode and transaction ID are required');
       }
       
-      // Generate a unique PNR
-      const pnr = 'PNR' + Math.floor(1000 + Math.random() * 9000).toString();
+      // Generate a unique PNR based on ticket table size
+      const ticketCountResult = await query('SELECT COUNT(*) as count FROM TICKET');
+      const ticketCount = Array.isArray(ticketCountResult) && ticketCountResult.length > 0 
+                         ? (ticketCountResult[0] as any).count : 0;
+      const pnr = 'PNR' + (1000 + ticketCount + 1).toString();
       
       // Use the provided fare or set a default
       const totalFare = body.total_fare || 500;

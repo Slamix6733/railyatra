@@ -777,4 +777,103 @@ JOIN
 JOIN
     STATION dest ON t.destination_station_id = dest.station_id
 WHERE 
-    t.train_id = :train_id; 
+    t.train_id = :train_id;
+
+-- Procedure to generate a unique PNR number
+DELIMITER //
+CREATE PROCEDURE generate_unique_pnr(OUT pnr_number BIGINT)
+BEGIN
+    DECLARE existing_count INT;
+    DECLARE base_pnr BIGINT;
+    
+    -- Get the count of tickets as the base for PNR generation
+    SELECT COUNT(*) INTO base_pnr FROM TICKET;
+    
+    -- Add 1000 to the base plus 1 for the new ticket
+    SET pnr_number = 1000 + base_pnr + 1;
+    
+    -- Verify uniqueness (safety check)
+    SELECT COUNT(*) INTO existing_count FROM TICKET WHERE pnr_number = pnr_number;
+    
+    -- In the rare case of collision, keep incrementing until unique
+    WHILE existing_count > 0 DO
+        SET pnr_number = pnr_number + 1;
+        SELECT COUNT(*) INTO existing_count FROM TICKET WHERE pnr_number = pnr_number;
+    END WHILE;
+END//
+DELIMITER ;
+
+-- Trigger to automatically generate PNR before ticket insert
+DELIMITER //
+CREATE TRIGGER before_ticket_insert
+BEFORE INSERT ON TICKET
+FOR EACH ROW
+BEGIN
+    DECLARE new_pnr BIGINT;
+    
+    -- Only generate a new PNR if one isn't already provided
+    IF NEW.pnr_number IS NULL THEN
+        CALL generate_unique_pnr(new_pnr);
+        SET NEW.pnr_number = new_pnr;
+    END IF;
+END//
+DELIMITER ;
+
+-- Procedure to handle RAC seats calculation
+DELIMITER //
+CREATE PROCEDURE calculate_seat_availability(
+    IN journey_id INT,
+    OUT available_confirmed INT,
+    OUT available_rac INT,
+    OUT available_waitlist INT
+)
+BEGIN
+    DECLARE total_seats INT;
+    DECLARE booked_confirmed INT;
+    DECLARE booked_rac INT;
+    DECLARE rac_threshold INT;
+    
+    -- Get total seats for this journey
+    SELECT sc.total_seats INTO total_seats
+    FROM JOURNEY j
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN SEAT_CONFIGURATION sc ON s.train_id = sc.train_id AND j.class_id = sc.class_id
+    WHERE j.journey_id = journey_id;
+    
+    -- Calculate RAC threshold (90% of total seats)
+    SET rac_threshold = FLOOR(total_seats * 0.9);
+    
+    -- Count booked confirmed and RAC seats
+    SELECT 
+        COUNT(CASE WHEN pt.status = 'CONFIRMED' THEN 1 END),
+        COUNT(CASE WHEN pt.status = 'RAC' THEN 1 END)
+    INTO booked_confirmed, booked_rac
+    FROM PASSENGER_TICKET pt
+    JOIN TICKET t ON pt.ticket_id = t.ticket_id
+    WHERE t.journey_id = journey_id;
+    
+    -- Calculate availability
+    IF booked_confirmed < rac_threshold THEN
+        -- Confirmed seats available
+        SET available_confirmed = rac_threshold - booked_confirmed;
+        SET available_rac = total_seats - rac_threshold - booked_rac;
+    ELSE
+        -- Only RAC seats available
+        SET available_confirmed = 0;
+        SET available_rac = total_seats - booked_confirmed - booked_rac;
+    END IF;
+    
+    -- If RAC is also full, set to 0
+    IF available_rac < 0 THEN
+        SET available_rac = 0;
+    END IF;
+    
+    -- Waitlist is theoretically unlimited, but we'll cap it at 50 for this example
+    IF booked_confirmed + booked_rac >= total_seats THEN
+        -- All seats including RAC are full
+        SET available_waitlist = 50; -- Arbitrary cap on waitlist size
+    ELSE
+        SET available_waitlist = 0; -- Waitlist not open yet
+    END IF;
+END//
+DELIMITER ; 
