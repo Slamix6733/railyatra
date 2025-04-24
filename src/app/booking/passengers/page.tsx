@@ -11,6 +11,7 @@ interface Passenger {
   age: string;
   gender: string;
   berth_preference: string;
+  concession_category: string;
 }
 
 export default function PassengerPage() {
@@ -22,7 +23,7 @@ export default function PassengerPage() {
   const journeyDate = searchParams.get('date') || '';
 
   const [passengers, setPassengers] = useState<Passenger[]>([
-    { id: 1, name: '', age: '', gender: 'male', berth_preference: 'no_preference' }
+    { id: 1, name: '', age: '', gender: 'male', berth_preference: 'no_preference', concession_category: 'None' }
   ]);
   const [trainDetails, setTrainDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -162,7 +163,8 @@ export default function PassengerPage() {
           name: '', 
           age: '', 
           gender: 'male', 
-          berth_preference: 'no_preference' 
+          berth_preference: 'no_preference',
+          concession_category: 'None' 
         }
       ]);
     }
@@ -233,7 +235,8 @@ export default function PassengerPage() {
           name: p.name,
           age: Number(p.age),
           gender: p.gender,
-          berth_preference: p.berth_preference
+          berth_preference: p.berth_preference,
+          concession_category: p.concession_category
         })),
         contact_email: contactEmail,
         contact_phone: contactPhone,
@@ -432,6 +435,25 @@ export default function PassengerPage() {
                           <option value="upper">Upper Berth</option>
                           <option value="side_lower">Side Lower</option>
                           <option value="side_upper">Side Upper</option>
+                        </select>
+                      </div>
+                      
+                      <div className="col-span-1 sm:col-span-2 md:col-span-4">
+                        <label htmlFor={`concession-${passenger.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Concession Category
+                        </label>
+                        <select
+                          id={`concession-${passenger.id}`}
+                          value={passenger.concession_category}
+                          onChange={(e) => updatePassenger(passenger.id, 'concession_category', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-gray-900 appearance-none"
+                        >
+                          <option value="None">None</option>
+                          <option value="Senior Citizen">Senior Citizen</option>
+                          <option value="Student">Student</option>
+                          <option value="Disabled">Disabled</option>
+                          <option value="Armed Forces">Armed Forces</option>
+                          <option value="Freedom Fighter">Freedom Fighter</option>
                         </select>
                       </div>
                     </div>

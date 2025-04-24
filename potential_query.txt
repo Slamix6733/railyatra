@@ -363,6 +363,7 @@ BEGIN
     DECLARE catering_charges DECIMAL(10,2) DEFAULT 250.00;
     DECLARE superfast_charge DECIMAL(10,2) DEFAULT 75.00;
     DECLARE gst_rate DECIMAL(10,2) DEFAULT 0.05;
+    DECLARE total_concession_amount DECIMAL(10,2) DEFAULT 0.00;
     
     -- Get journey distance
     SELECT 
@@ -389,8 +390,61 @@ BEGIN
     FROM PASSENGER_TICKET pt
     WHERE pt.ticket_id = ticket_id;
     
+    -- Calculate individual passenger fares and concessions
+    CREATE TEMPORARY TABLE IF NOT EXISTS passenger_fares (
+        passenger_id INT,
+        passenger_name VARCHAR(100),
+        age INT,
+        concession_category VARCHAR(50),
+        concession_percentage DECIMAL(5,2),
+        individual_fare DECIMAL(10,2),
+        discounted_fare DECIMAL(10,2)
+    );
+    
+    -- Clear the temporary table
+    DELETE FROM passenger_fares;
+    
+    -- Insert passenger details with concession calculations
+    INSERT INTO passenger_fares
+    SELECT 
+        p.passenger_id,
+        p.name,
+        p.age,
+        p.concession_category,
+        CASE
+            WHEN p.concession_category = 'Senior Citizen' THEN 30.00
+            WHEN p.concession_category = 'Student' THEN 25.00
+            WHEN p.concession_category = 'Disabled' THEN 50.00
+            WHEN p.concession_category = 'Armed Forces' THEN 20.00
+            WHEN p.concession_category = 'Freedom Fighter' THEN 75.00
+            WHEN p.age <= 12 THEN 50.00  -- Children discount
+            WHEN p.age >= 60 THEN 30.00  -- Senior discount if not explicitly in Senior Citizen category
+            ELSE 0.00
+        END AS concession_percentage,
+        base_fare AS individual_fare,
+        base_fare * (1 - (CASE
+            WHEN p.concession_category = 'Senior Citizen' THEN 0.30
+            WHEN p.concession_category = 'Student' THEN 0.25
+            WHEN p.concession_category = 'Disabled' THEN 0.50
+            WHEN p.concession_category = 'Armed Forces' THEN 0.20
+            WHEN p.concession_category = 'Freedom Fighter' THEN 0.75
+            WHEN p.age <= 12 THEN 0.50  -- Children discount
+            WHEN p.age >= 60 THEN 0.30  -- Senior discount if not explicitly in Senior Citizen category
+            ELSE 0.00
+        END)) AS discounted_fare
+    FROM PASSENGER_TICKET pt
+    JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+    WHERE pt.ticket_id = ticket_id;
+    
+    -- Calculate total concession amount
+    SELECT SUM(individual_fare - discounted_fare) INTO total_concession_amount 
+    FROM passenger_fares;
+    
+    -- Calculate adjusted base fare (after concessions)
+    SELECT SUM(discounted_fare) INTO base_fare
+    FROM passenger_fares;
+    
     -- Calculate costs
-    SET base_fare = base_fare * passenger_count;
     SET reservation_fee = reservation_fee * passenger_count;
     SET fuel_surcharge_rate = base_fare * fuel_surcharge_rate;
     SET catering_charges = IF(journey_distance > 500, catering_charges, 0);
@@ -415,7 +469,9 @@ BEGIN
         ),
         'passenger_count', passenger_count,
         'fare_details', JSON_OBJECT(
-            'base_fare', base_fare,
+            'original_base_fare', (SELECT SUM(individual_fare) FROM passenger_fares),
+            'concession_amount', total_concession_amount,
+            'base_fare_after_concession', base_fare,
             'reservation_fee', reservation_fee,
             'fuel_surcharge', fuel_surcharge_rate,
             'catering_charges', catering_charges,
@@ -429,13 +485,18 @@ BEGIN
                     'passenger_id', p.passenger_id,
                     'name', p.name,
                     'age', p.age,
+                    'concession_category', p.concession_category,
+                    'concession_percentage', pf.concession_percentage,
                     'seat_number', pt.seat_number,
                     'berth_type', pt.berth_type,
-                    'status', pt.status
+                    'status', pt.status,
+                    'original_fare', pf.individual_fare,
+                    'discounted_fare', pf.discounted_fare
                 )
             )
             FROM PASSENGER_TICKET pt
             JOIN PASSENGER p ON pt.passenger_id = p.passenger_id
+            JOIN passenger_fares pf ON p.passenger_id = pf.passenger_id
             WHERE pt.ticket_id = t.ticket_id
         )
     ) INTO bill_data
@@ -448,7 +509,140 @@ BEGIN
     JOIN CLASS c ON j.class_id = c.class_id
     WHERE t.ticket_id = ticket_id;
     
+    -- Drop temporary table
+    DROP TEMPORARY TABLE IF EXISTS passenger_fares;
+    
     RETURN bill_data;
+END//
+DELIMITER ;
+
+-- 11. Generate total cost for a journey based on passenger details including concessions
+DELIMITER //
+CREATE FUNCTION generate_total_cost(
+    journey_id INT, 
+    passenger_details JSON
+)
+RETURNS JSON
+DETERMINISTIC
+BEGIN
+    DECLARE total_cost_data JSON;
+    DECLARE journey_distance DECIMAL(10,2);
+    DECLARE base_fare_per_km DECIMAL(10,2);
+    DECLARE passenger_count INT;
+    DECLARE original_base_fare DECIMAL(10,2);
+    DECLARE base_fare_after_concession DECIMAL(10,2);
+    DECLARE total_concession_amount DECIMAL(10,2);
+    DECLARE reservation_fee DECIMAL(10,2) DEFAULT 60.00;
+    DECLARE fuel_surcharge DECIMAL(10,2);
+    DECLARE catering_charges DECIMAL(10,2) DEFAULT 250.00;
+    DECLARE superfast_charge DECIMAL(10,2) DEFAULT 75.00;
+    DECLARE gst_amount DECIMAL(10,2);
+    DECLARE total_amount DECIMAL(10,2);
+    
+    -- Get journey distance
+    SELECT 
+        ABS(rs_dest.distance_from_source - rs_src.distance_from_source) INTO journey_distance
+    FROM JOURNEY j
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN TRAIN tr ON s.train_id = tr.train_id
+    JOIN ROUTE_SEGMENT rs_src ON tr.train_id = rs_src.train_id AND j.source_station_id = rs_src.station_id
+    JOIN ROUTE_SEGMENT rs_dest ON tr.train_id = rs_dest.train_id AND j.destination_station_id = rs_dest.station_id
+    WHERE j.journey_id = journey_id;
+    
+    -- Get base fare per km
+    SELECT 
+        sc.fare_per_km INTO base_fare_per_km
+    FROM JOURNEY j
+    JOIN SCHEDULE s ON j.schedule_id = s.schedule_id
+    JOIN SEAT_CONFIGURATION sc ON s.train_id = sc.train_id AND j.class_id = sc.class_id
+    WHERE j.journey_id = journey_id;
+    
+    -- Set passenger count
+    SET passenger_count = JSON_LENGTH(passenger_details);
+    
+    -- Calculate individual and total fares
+    SET original_base_fare = journey_distance * base_fare_per_km * passenger_count;
+    SET base_fare_after_concession = 0;
+    SET total_concession_amount = 0;
+    
+    -- Process each passenger
+    BEGIN
+        DECLARE i INT DEFAULT 0;
+        DECLARE passenger_age INT;
+        DECLARE concession_category VARCHAR(50);
+        DECLARE concession_rate DECIMAL(5,2);
+        DECLARE individual_fare DECIMAL(10,2);
+        DECLARE discounted_fare DECIMAL(10,2);
+        
+        WHILE i < passenger_count DO
+            -- Extract passenger details
+            SET passenger_age = JSON_EXTRACT(passenger_details, CONCAT('$[', i, '].age'));
+            SET concession_category = JSON_UNQUOTE(JSON_EXTRACT(passenger_details, CONCAT('$[', i, '].concession_category')));
+            
+            -- Determine concession rate
+            IF concession_category = 'Senior Citizen' THEN
+                SET concession_rate = 0.30;
+            ELSEIF concession_category = 'Student' THEN
+                SET concession_rate = 0.25;
+            ELSEIF concession_category = 'Disabled' THEN
+                SET concession_rate = 0.50;
+            ELSEIF concession_category = 'Armed Forces' THEN
+                SET concession_rate = 0.20;
+            ELSEIF concession_category = 'Freedom Fighter' THEN
+                SET concession_rate = 0.75;
+            ELSEIF passenger_age <= 12 THEN
+                SET concession_rate = 0.50; -- Children discount
+            ELSEIF passenger_age >= 60 THEN
+                SET concession_rate = 0.30; -- Senior discount
+            ELSE
+                SET concession_rate = 0.00;
+            END IF;
+            
+            -- Calculate fares
+            SET individual_fare = journey_distance * base_fare_per_km;
+            SET discounted_fare = individual_fare * (1 - concession_rate);
+            
+            -- Update totals
+            SET total_concession_amount = total_concession_amount + (individual_fare - discounted_fare);
+            SET base_fare_after_concession = base_fare_after_concession + discounted_fare;
+            
+            -- Move to next passenger
+            SET i = i + 1;
+        END WHILE;
+    END;
+    
+    -- Calculate other charges
+    SET reservation_fee = reservation_fee * passenger_count;
+    SET fuel_surcharge = base_fare_after_concession * 0.05;
+    SET catering_charges = IF(journey_distance > 500, catering_charges, 0);
+    SET superfast_charge = superfast_charge * passenger_count;
+    
+    -- Calculate GST
+    SET gst_amount = (base_fare_after_concession + reservation_fee + fuel_surcharge + superfast_charge) * 0.05;
+    
+    -- Calculate total amount
+    SET total_amount = base_fare_after_concession + reservation_fee + fuel_surcharge + catering_charges + superfast_charge + gst_amount;
+    
+    -- Create cost summary
+    SET total_cost_data = JSON_OBJECT(
+        'journey_id', journey_id,
+        'journey_distance', journey_distance,
+        'base_fare_per_km', base_fare_per_km,
+        'passenger_count', passenger_count,
+        'fare_details', JSON_OBJECT(
+            'original_base_fare', original_base_fare,
+            'concession_amount', total_concession_amount,
+            'base_fare_after_concession', base_fare_after_concession,
+            'reservation_fee', reservation_fee,
+            'fuel_surcharge', fuel_surcharge,
+            'catering_charges', catering_charges,
+            'superfast_charge', superfast_charge,
+            'gst', gst_amount,
+            'total_amount', total_amount
+        )
+    );
+    
+    RETURN total_cost_data;
 END//
 DELIMITER ;
 

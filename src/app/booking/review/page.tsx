@@ -15,6 +15,7 @@ interface BookingData {
     age: number;
     gender: string;
     berth_preference: string;
+    concession_category: string;
   }>;
   contact_email: string;
   contact_phone: string;
@@ -182,6 +183,19 @@ export default function BookingReview() {
     return classNames[classCode] || "Sleeper Class";
   };
   
+  // Helper function to get default fare based on class code
+  const getDefaultFare = (classCode: string) => {
+    const defaultFares: {[key: string]: number} = {
+      "SL": 850,
+      "3A": 1450,
+      "2A": 1950,
+      "1A": 2750,
+      "CC": 1200
+    };
+    
+    return defaultFares[classCode] || 1000;
+  };
+  
   const handlePaymentMethodChange = (method: string) => {
     setPaymentMethod(method);
   };
@@ -193,10 +207,90 @@ export default function BookingReview() {
       config => config.class_id === bookingData.class_id
     );
     
-    if (!selectedClass) return 0;
+    // Use default fare if selected class is missing or has zero fare
+    let baseFare = selectedClass?.calculated_fare;
+    if (!baseFare || baseFare <= 0) {
+      baseFare = getDefaultFare(bookingData.class_code);
+    }
     
-    // Return the total fare or fallback to using the total_fare from bookingData
-    return (selectedClass.calculated_fare * bookingData.passengers.length) || bookingData.total_fare || 0;
+    let totalFare = 0;
+    
+    // Calculate fare for each passenger with applicable concessions
+    bookingData.passengers.forEach(passenger => {
+      let passengerFare = baseFare;
+      let concessionDiscount = 0;
+      
+      // Apply concession based on category
+      if (passenger.concession_category !== 'None') {
+        switch (passenger.concession_category) {
+          case 'Senior Citizen':
+            concessionDiscount = 0.30; // 30% discount
+            break;
+          case 'Student':
+            concessionDiscount = 0.25; // 25% discount
+            break;
+          case 'Disabled':
+            concessionDiscount = 0.50; // 50% discount
+            break;
+          case 'Armed Forces':
+            concessionDiscount = 0.20; // 20% discount
+            break;
+          case 'Freedom Fighter':
+            concessionDiscount = 0.75; // 75% discount
+            break;
+          default:
+            concessionDiscount = 0;
+        }
+      }
+      
+      // Apply age-based concessions if not already in a concession category
+      if (passenger.concession_category === 'None') {
+        if (passenger.age <= 12) {
+          // Children discount
+          concessionDiscount = 0.50; // 50% discount for children
+        } else if (passenger.age >= 60) {
+          // Senior citizen discount
+          concessionDiscount = 0.30; // 30% discount for seniors
+        }
+      }
+      
+      // Apply discount to fare
+      passengerFare = passengerFare * (1 - concessionDiscount);
+      totalFare += passengerFare;
+    });
+    
+    // Ensure we don't return NaN
+    return isNaN(totalFare) ? 0 : totalFare;
+  };
+  
+  // Calculate total concession savings
+  const calculateConcessionSavings = () => {
+    if (!trainDetails || !bookingData) return 0;
+    
+    const selectedClass = trainDetails.seat_configurations.find(
+      config => config.class_id === bookingData.class_id
+    );
+    
+    // Use default fare if selected class is missing or has zero fare
+    let baseFare = selectedClass?.calculated_fare;
+    if (!baseFare || baseFare <= 0) {
+      baseFare = getDefaultFare(bookingData.class_code);
+    }
+    
+    const fullFare = baseFare * bookingData.passengers.length;
+    const discountedFare = calculateTotalFare();
+    
+    const savings = fullFare - discountedFare;
+    return isNaN(savings) ? 0 : savings;
+  };
+  
+  // Check if any concessions are applied
+  const hasConcessions = () => {
+    if (!bookingData) return false;
+    
+    return bookingData.passengers.some(passenger => 
+      passenger.concession_category !== 'None' || passenger.age <= 12 || passenger.age >= 60
+    );
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -589,13 +683,14 @@ export default function BookingReview() {
                 
                 <div className="p-4">
                   <table className="min-w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                        <th className="py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                        <th className="py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
-                        <th className="py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gender</th>
-                        <th className="py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Berth</th>
+                    <thead className="bg-gray-50 text-gray-600">
+                      <tr>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">#</th>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">Name</th>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">Age</th>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">Gender</th>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">Berth</th>
+                        <th className="py-3 px-4 text-left text-xs font-semibold">Concession</th>
                       </tr>
                     </thead>
                     <tbody className="stagger-animation">
@@ -606,6 +701,7 @@ export default function BookingReview() {
                           <td className="py-3 text-sm text-gray-600">{passenger.age}</td>
                           <td className="py-3 text-sm text-gray-600 capitalize">{passenger.gender}</td>
                           <td className="py-3 text-sm text-gray-600 capitalize">{passenger.berth_preference.replace('_', ' ')}</td>
+                          <td className="py-3 text-sm text-gray-600">{passenger.concession_category !== 'None' ? passenger.concession_category : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -640,8 +736,23 @@ export default function BookingReview() {
                       <p className="text-gray-600">Base Fare ({bookingData.passengers.length} {bookingData.passengers.length === 1 ? 'passenger' : 'passengers'})</p>
                       <p className="text-xs text-gray-500">Class: {selectedClass?.class_name}</p>
                     </div>
-                    <p className="text-gray-800 font-medium">₹{selectedClass?.calculated_fare} × {bookingData.passengers.length}</p>
+                    <p className="text-gray-800 font-medium">
+                      ₹{(() => {
+                        const baseFare = selectedClass?.calculated_fare || getDefaultFare(bookingData.class_code);
+                        return baseFare.toFixed(2);
+                      })()} × {bookingData.passengers.length}
+                    </p>
                   </div>
+                  
+                  {hasConcessions() && (
+                    <div className="flex justify-between items-center pb-3 border-b border-gray-100">
+                      <div>
+                        <p className="text-green-600">Concession Discount</p>
+                        <p className="text-xs text-gray-500">Based on category and age</p>
+                      </div>
+                      <p className="text-green-600 font-medium">- ₹{(calculateConcessionSavings() || 0).toFixed(2)}</p>
+                    </div>
+                  )}
                   
                   <div className="flex justify-between items-center pb-3 border-b border-gray-100">
                     <p className="text-gray-600">Service Charge</p>
@@ -650,12 +761,12 @@ export default function BookingReview() {
                   
                   <div className="flex justify-between items-center pb-3">
                     <p className="text-gray-600">GST (5%)</p>
-                    <p className="text-gray-800 font-medium">₹{calculateTotalFare() !== undefined && calculateTotalFare() !== null ? ((calculateTotalFare() + 30) * 0.05).toFixed(2) : '0.00'}</p>
+                    <p className="text-gray-800 font-medium">₹{(((calculateTotalFare() || 0) + 30) * 0.05).toFixed(2)}</p>
                   </div>
                   
                   <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                     <p className="text-base font-semibold text-gray-800">Total Amount</p>
-                    <p className="text-lg font-bold text-blue-600">₹{calculateTotalFare() !== undefined && calculateTotalFare() !== null ? (calculateTotalFare() + 30 + (calculateTotalFare() + 30) * 0.05).toFixed(2) : '0.00'}</p>
+                    <p className="text-lg font-bold text-blue-600">₹{((calculateTotalFare() || 0) + 30 + ((calculateTotalFare() || 0) + 30) * 0.05).toFixed(2)}</p>
                   </div>
                 </div>
                 
