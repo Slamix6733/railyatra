@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-RailYatra is a comprehensive railway ticket reservation system built as part of CS202 Mini Project. It provides a realistic train booking experience with advanced features such as real-time seat availability, waitlist management, and dynamic pricing.
+RailYatra is a comprehensive railway ticket reservation system built as part of CS2202 Mini Project. It provides a realistic train booking experience with advanced features such as real-time seat availability, waitlist management, and dynamic pricing.
 
 The application is built with Next.js, TypeScript, Tailwind CSS, and MySQL, offering a modern and responsive user interface while maintaining robust backend functionality.
 
