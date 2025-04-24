@@ -166,11 +166,29 @@ export async function POST(request: NextRequest) {
       
       // Apply age-based concessions
       if (passenger.age <= 12) {
-        // Children discount
-        concessionPercentage = Math.max(concessionPercentage, 50); // 50% discount for children
+        // Children discount - get from CONCESSION table
+        const childConcessionCheck = await query(
+          'SELECT discount_percentage FROM CONCESSION WHERE category = ?',
+          ['Child']
+        );
+        
+        const childConcessionPercentage = Array.isArray(childConcessionCheck) && childConcessionCheck.length > 0
+          ? (childConcessionCheck[0] as QueryRow).discount_percentage || 0
+          : 0;
+          
+        concessionPercentage = Math.max(concessionPercentage, childConcessionPercentage);
       } else if (passenger.age >= 60) {
-        // Senior citizen discount
-        concessionPercentage = Math.max(concessionPercentage, 30); // 30% discount for seniors
+        // Senior citizen discount - get from CONCESSION table
+        const seniorConcessionCheck = await query(
+          'SELECT discount_percentage FROM CONCESSION WHERE category = ?',
+          ['Senior Citizen']
+        );
+        
+        const seniorConcessionPercentage = Array.isArray(seniorConcessionCheck) && seniorConcessionCheck.length > 0
+          ? (seniorConcessionCheck[0] as QueryRow).discount_percentage || 0
+          : 0;
+          
+        concessionPercentage = Math.max(concessionPercentage, seniorConcessionPercentage);
       }
       
       // Calculate fare after concession
