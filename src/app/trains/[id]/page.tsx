@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { FaTrain, FaClock, FaCalendarAlt, FaArrowRight, FaMapMarkerAlt, FaChair } from 'react-icons/fa';
+import { FaTrain, FaClock, FaCalendarAlt, FaArrowRight, FaMapMarkerAlt, FaChair, FaTable } from 'react-icons/fa';
+import TrainClassDetails from '@/components/TrainClassDetails';
 
 interface ClassOption {
   class_id: number;
@@ -47,6 +48,7 @@ export default function TrainDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedClass, setSelectedClass] = useState<string>('');
+  const [showDetailedClassView, setShowDetailedClassView] = useState(false);
   
   const date = searchParams.get('date') || '';
   const trainId = params.id as string;
@@ -95,6 +97,10 @@ export default function TrainDetailPage() {
     }
     
     router.push(`/booking/passengers?train=${trainId}&class=${selectedClass}&date=${date}`);
+  };
+
+  const toggleClassView = () => {
+    setShowDetailedClassView(!showDetailedClassView);
   };
 
   // Calculate duration in hours and minutes
@@ -218,37 +224,60 @@ export default function TrainDetailPage() {
           </div>
           
           <div className="border-t border-gray-200 pt-4">
-            <h2 className="text-lg font-semibold mb-4 animate-slideInLeft" style={{animationDelay: '0.2s'}}>Available Classes</h2>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 stagger-animation">
-              {train.seat_configurations?.map((classOption, index) => (
-                <div
-                  key={classOption.class_id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-all duration-300 animate-fadeIn ${
-                    selectedClass === classOption.class_code 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
-                  onClick={() => handleClassChange(classOption.class_code)}
-                  style={{animationDelay: `${index * 0.1 + 0.3}s`}}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center">
-                      <FaChair className={selectedClass === classOption.class_code ? "text-blue-600 mr-2" : "text-gray-500 mr-2"} />
-                      <span className="font-medium text-gray-900">{classOption.class_name}</span>
-                    </div>
-                    <span className="text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                      {classOption.class_code}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Available: <span className="font-medium text-green-600">{classOption.seats_available} seats</span></span>
-                    <span className="font-semibold text-gray-900">₹{classOption.calculated_fare}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold animate-slideInLeft" style={{animationDelay: '0.2s'}}>Available Classes</h2>
+              <button 
+                onClick={toggleClassView}
+                className="flex items-center px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors text-sm"
+              >
+                {showDetailedClassView ? (
+                  <>
+                    <FaChair className="mr-1" /> Basic View
+                  </>
+                ) : (
+                  <>
+                    <FaTable className="mr-1" /> Detailed View
+                  </>
+                )}
+              </button>
             </div>
+            
+            {showDetailedClassView ? (
+              <TrainClassDetails 
+                trainId={trainId} 
+                date={date} 
+              />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6 stagger-animation">
+                {train.seat_configurations?.map((classOption, index) => (
+                  <div
+                    key={classOption.class_id}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all duration-300 animate-fadeIn ${
+                      selectedClass === classOption.class_code 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                    onClick={() => handleClassChange(classOption.class_code)}
+                    style={{animationDelay: `${index * 0.1 + 0.3}s`}}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center">
+                        <FaChair className={selectedClass === classOption.class_code ? "text-blue-600 mr-2" : "text-gray-500 mr-2"} />
+                        <span className="font-medium text-gray-900">{classOption.class_name}</span>
+                      </div>
+                      <span className="text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                        {classOption.class_code}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Available: <span className="font-medium text-green-600">{classOption.seats_available} seats</span></span>
+                      <span className="font-semibold text-gray-900">₹{classOption.calculated_fare}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             
             <button
               onClick={proceedToBooking}

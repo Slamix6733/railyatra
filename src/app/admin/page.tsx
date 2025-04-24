@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { FaTicketAlt, FaCalendarAlt, FaChair, FaUsers, FaUserClock, FaMoneyBillWave, FaExchangeAlt, FaRoute, FaFileInvoiceDollar } from 'react-icons/fa';
+import { FaTicketAlt, FaCalendarAlt, FaChair, FaUsers, FaUserClock, FaMoneyBillWave, FaExchangeAlt, FaRoute, FaFileInvoiceDollar, FaPlus, FaEdit, FaLongArrowAltRight, FaTimes, FaTable, FaEye } from 'react-icons/fa';
 import Link from 'next/link';
 
 interface StatCard {
@@ -763,8 +763,187 @@ export default function AdminPage() {
                 
                 {activeTab === 'trains' && (
                   <div>
-                    <h2 className="text-xl font-semibold mb-6 text-gray-900 dark:text-white">Train Management</h2>
-                    <p className="text-gray-600 dark:text-gray-400">This section is under development.</p>
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Train Management</h2>
+                      <Link href="/admin/trains/new" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg flex items-center transition-colors">
+                        <FaPlus className="mr-2" /> Add New Train
+                      </Link>
+                    </div>
+                    
+                    <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden mb-6">
+                      <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-900">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Manage Trains</h3>
+                      </div>
+                      
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                          <thead className="bg-gray-50 dark:bg-gray-900">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Train Number</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Route</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {stats.trains && stats.trains.length > 0 ? (
+                              stats.trains.map((train: any) => (
+                                <tr key={train.train_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{train.train_number}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{train.train_name}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{train.train_type}</td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    <span className="flex items-center">
+                                      <span className="font-medium text-gray-900 dark:text-white">{train.source_station_code}</span>
+                                      <FaLongArrowAltRight className="mx-2 text-gray-400" />
+                                      <span className="font-medium text-gray-900 dark:text-white">{train.destination_station_code}</span>
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      train.status === 'active' 
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                    }`}>
+                                      {train.status === 'active' ? 'Active' : 'Inactive'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div className="flex justify-end space-x-2">
+                                      <Link 
+                                        href={`/admin/trains/${train.train_id}/edit`}
+                                        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                      >
+                                        <FaEdit />
+                                      </Link>
+                                      <Link 
+                                        href={`/admin/trains/${train.train_id}/view`}
+                                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                                      >
+                                        <FaEye />
+                                      </Link>
+                                      <Link 
+                                        href={`/admin/trains/${train.train_id}/class-details`}
+                                        className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300"
+                                        title="View Class Details"
+                                      >
+                                        <FaTable />
+                                      </Link>
+                                      <Link 
+                                        href={`/admin/trains/${train.train_id}/route`}
+                                        className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
+                                        title="Manage Route"
+                                      >
+                                        <FaRoute />
+                                      </Link>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                  No trains found. Add a new train to get started.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+                        <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-900">
+                          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Recent Train Updates</h3>
+                        </div>
+                        <div className="p-6">
+                          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {stats.recent_train_updates && stats.recent_train_updates.length > 0 ? (
+                              stats.recent_train_updates.map((update: any, index: number) => (
+                                <li key={index} className="py-4 first:pt-0 last:pb-0">
+                                  <div className="flex items-start">
+                                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                                      update.type === 'created' ? 'bg-green-100 dark:bg-green-900' : 
+                                      update.type === 'updated' ? 'bg-blue-100 dark:bg-blue-900' : 
+                                      'bg-red-100 dark:bg-red-900'
+                                    }`}>
+                                      {update.type === 'created' ? (
+                                        <FaPlus className={`text-green-600 dark:text-green-400`} />
+                                      ) : update.type === 'updated' ? (
+                                        <FaEdit className={`text-blue-600 dark:text-blue-400`} />
+                                      ) : (
+                                        <FaTimes className={`text-red-600 dark:text-red-400`} />
+                                      )}
+                                    </div>
+                                    <div className="ml-4 flex-1">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white">{update.message}</p>
+                                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{update.timestamp}</p>
+                                    </div>
+                                  </div>
+                                </li>
+                              ))
+                            ) : (
+                              <li className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                No recent train updates.
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+                        <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-900">
+                          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Train Statistics</h3>
+                        </div>
+                        <div className="p-6">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Trains</p>
+                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.train_stats?.total_trains || 0}</p>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Active Today</p>
+                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.train_stats?.active_today || 0}</p>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Average Occupancy</p>
+                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.train_stats?.avg_occupancy || '0%'}</p>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Delayed Trains</p>
+                              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.train_stats?.delayed_trains || 0}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-6">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Train Types Distribution</h4>
+                            <div className="space-y-2">
+                              {stats.train_type_distribution ? (
+                                Object.entries(stats.train_type_distribution).map(([type, percentage]: [string, any]) => (
+                                  <div key={type} className="flex items-center">
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 w-28">{type}</span>
+                                    <div className="flex-1 ml-2">
+                                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                        <div 
+                                          className="bg-blue-600 h-2 rounded-full" 
+                                          style={{ width: `${percentage}%` }}
+                                        ></div>
+                                      </div>
+                                    </div>
+                                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{percentage}%</span>
+                                  </div>
+                                ))
+                              ) : (
+                                <p className="text-sm text-gray-500 dark:text-gray-400">No data available</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </>
